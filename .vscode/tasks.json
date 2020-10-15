@@ -1,0 +1,41 @@
+{
+  "tasks": [
+    {
+      "label": "Build - WSL - Reader",
+      "command": "gcc src/lab1/reader.c -o bin/reader -g",
+      "type": "shell",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "shell": {
+          "executable": "bash.exe",
+          "args": [
+            "-c"
+          ]
+        }
+      }
+    },
+    {
+      "label": "Build - WSL - Writer",
+      "command": "gcc src/lab1/writer.c -o bin/writer -g",
+      "type": "shell",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "shell": {
+          "executable": "bash.exe",
+          "args": [
+            "-c"
+          ]
+        }
+      }
+    }
+  ],
+  "version": "2.0.0"
+}
