@@ -1,0 +1,67 @@
+{
+  "tasks": [
+    {
+      "type": "shell",
+      "label": "Build - Debug",
+      "command": "make DEBUGFLAG=\"-g\"",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "type": "shell",
+      "label": "Build - Optimized",
+      "command": "make DEBUGFLAG=\"-O2\"",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build - WSL - Debug",
+      "command": "make DEBUGFLAG=\"-g\"",
+      "type": "shell",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "shell": {
+          "executable": "bash.exe",
+          "args": [
+            "-c"
+          ]
+        }
+      }
+    },
+    {
+      "label": "Build - WSL - Optimized",
+      "command": "make DEBUGFLAG=\"-O2\"",
+      "type": "shell",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "shell": {
+          "executable": "bash.exe",
+          "args": [
+            "-c"
+          ]
+        }
+      }
+    },
+    {
+      "type": "shell",
+      "label": "Clean",
+      "command": "make clean",
+      "problemMatcher": []
+    },
+  ],
+  "version": "2.0.0"
+}
