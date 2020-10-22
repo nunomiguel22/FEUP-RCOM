@@ -9,13 +9,13 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
+#include "CharBuffer.h"
 
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
 
 /* Framing */
 #define CONTROL_FRAME_SIZE 5
-#define MAX_FRAME_SIZE 6
 #define FLAG 0x7E  // Flag for beggining and ending of frame
 #define ESC 0x7D   // Escape character for byte stuffing
 #define AF1 0x03   // Transmitter commands, Receiver replys
@@ -41,7 +41,6 @@ typedef struct {
   unsigned int sequenceNumber;
   unsigned int timeout;
   unsigned int numTransmissions;
-  char frame[MAX_FRAME_SIZE];
 } LinkLayer;
 
 typedef enum {
@@ -53,6 +52,16 @@ typedef enum {
   REJ = 0x01
 } ControlTypes;
 
+typedef enum {
+  FSFIELD,    // Start Flag
+  AFIELD,     // Address
+  CFIELD,     // Control
+  BCC1FIELD,  // BCC1
+  DFIELD,     // Data
+  BCC2FIELD,  // BCC2
+  FEFIELD     // End Flag
+} FrameField;
+
 /* Globals */
 static LinkLayer ll;
 static LinkType linkType;
@@ -62,6 +71,7 @@ int initSerialPort(int port, LinkType type);
 bool isControlCommand(ControlTypes type);
 void createControlFrame(char* frame, ControlTypes controlType);
 int sendControlFrame(int fd, ControlTypes controlType);
+int readFrame(int fd, CharBuffer* charbuffer);
 
 /* Link Layer Functions */
 int llopen(int port, LinkType type) {
@@ -71,6 +81,9 @@ int llopen(int port, LinkType type) {
   if (linkType == TRANSMITTER) {
     sendControlFrame(fd, SET);
   } else if (linkType == RECEIVER) {
+    CharBuffer buffer;
+    readFrame(fd, &buffer);
+    sendControlFrame(fd, UA);
   }
 
   // TODO: SEND AND READ CONTROL FRAME DEPENDING ON TRANS/RECEIVER
@@ -83,6 +96,32 @@ int llwrite(int fd, char* buffer, int length);
 int llread(int fd, char* buffer);
 
 /* Auxiliar Functions */
+int readFrame(int fd, CharBuffer* charbuffer) {
+  if (charbuffer == NULL) return -1;
+  CharBuffer_init(charbuffer, CONTROL_FRAME_SIZE);
+
+  char incByte = 0x00;
+  int readStatus = 0;
+  // Clear buffer and wait for a flag
+  while (readStatus == 0 || incByte != FLAG)  // TO-DO Implement timeout
+    readStatus = read(fd, &incByte, 1);
+  CharBuffer_push(charbuffer, incByte);
+  // Reset vars
+  readStatus = 0;
+  incByte = 0x00;
+  // Read serial until flag is found
+  while (incByte != FLAG) {
+    readStatus = read(fd, &incByte, 1);
+    if (readStatus == 0) continue;
+
+    CharBuffer_push(charbuffer, incByte);
+    CharBuffer_printHex(charbuffer);
+  }
+
+  // TO-DO Validate Frame
+
+  return 0;
+}
 
 int sendControlFrame(int fd, ControlTypes controlType) {
   char frame[CONTROL_FRAME_SIZE];
