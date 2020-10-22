@@ -5,7 +5,7 @@
 // DO LLCLOSE
 
 int main(int argc, char** argv) {
-  int fd = llopen(11, RECEIVER);
+  int fd = llopen(10, TRANSMITTER);
 
   return 0;
 }

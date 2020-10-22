@@ -11,6 +11,10 @@
 #include <stdbool.h>
 #include "CharBuffer.h"
 
+// DEBUG
+#define DEBUG_PRINT_CONTROL_FRAMES
+//#define DEBUG_PRINT_FRAMES
+
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
 
@@ -53,14 +57,12 @@ typedef enum {
 } ControlTypes;
 
 typedef enum {
-  FSFIELD,    // Start Flag
-  AFIELD,     // Address
-  CFIELD,     // Control
-  BCC1FIELD,  // BCC1
-  DFIELD,     // Data
-  BCC2FIELD,  // BCC2
-  FEFIELD     // End Flag
-} FrameField;
+  FSFIELD = 0x00,    // Start Flag
+  AFIELD = 0x01,     // Address
+  CFIELD = 0x02,     // Control
+  BCC1FIELD = 0x03,  // BCC1
+  FEFIELD = 0x04     // End Flag
+} ControlFrameField;
 
 /* Globals */
 static LinkLayer ll;
@@ -70,8 +72,12 @@ static LinkType linkType;
 int initSerialPort(int port, LinkType type);
 bool isControlCommand(ControlTypes type);
 void createControlFrame(char* frame, ControlTypes controlType);
+int readControlFrame(int fd, ControlTypes controlType);
 int sendControlFrame(int fd, ControlTypes controlType);
 int readFrame(int fd, CharBuffer* charbuffer);
+int validateControlFrame(CharBuffer* charbuffer, ControlTypes type);
+char getAddressField(LinkType lnk, ControlTypes type);
+void printControlType(ControlTypes type);
 
 /* Link Layer Functions */
 int llopen(int port, LinkType type) {
@@ -80,10 +86,10 @@ int llopen(int port, LinkType type) {
 
   if (linkType == TRANSMITTER) {
     sendControlFrame(fd, SET);
+    readControlFrame(fd, UA);
   } else if (linkType == RECEIVER) {
     CharBuffer buffer;
-    readFrame(fd, &buffer);
-    sendControlFrame(fd, UA);
+    if (readControlFrame(fd, SET) == 0) sendControlFrame(fd, UA);
   }
 
   // TODO: SEND AND READ CONTROL FRAME DEPENDING ON TRANS/RECEIVER
@@ -96,6 +102,35 @@ int llwrite(int fd, char* buffer, int length);
 int llread(int fd, char* buffer);
 
 /* Auxiliar Functions */
+int validateControlFrame(CharBuffer* charbuffer, ControlTypes type) {
+  if (charbuffer == NULL) return -1;
+  if (charbuffer->size != CONTROL_FRAME_SIZE) return -1;
+
+  char expectedAF = getAddressField(linkType ^ 1, type);
+  if (charbuffer->buffer[FSFIELD] != FLAG) return -1;
+  if (charbuffer->buffer[AFIELD] != expectedAF) return -1;
+  if (charbuffer->buffer[CFIELD] != type) return -1;
+  if (charbuffer->buffer[BCC1FIELD] != (expectedAF ^ type)) return -1;
+  if (charbuffer->buffer[FEFIELD] != FLAG) return -1;
+
+  return 0;
+}
+
+int readControlFrame(int fd, ControlTypes controlType) {
+  CharBuffer charbuffer;
+  if (readFrame(fd, &charbuffer) != 0) return -1;
+  if (validateControlFrame(&charbuffer, controlType) == -1) return -1;
+  CharBuffer_destroy(&charbuffer);
+
+#ifdef DEBUG_PRINT_CONTROL_FRAMES
+  printf("Received control packet ");
+  printControlType(controlType);
+  printf("\n");
+#endif
+
+  return 0;
+}
+
 int readFrame(int fd, CharBuffer* charbuffer) {
   if (charbuffer == NULL) return -1;
   CharBuffer_init(charbuffer, CONTROL_FRAME_SIZE);
@@ -115,10 +150,11 @@ int readFrame(int fd, CharBuffer* charbuffer) {
     if (readStatus == 0) continue;
 
     CharBuffer_push(charbuffer, incByte);
-    CharBuffer_printHex(charbuffer);
   }
 
-  // TO-DO Validate Frame
+#ifdef DEBUG_PRINT_FRAMES
+  CharBuffer_printHex(charbuffer);
+#endif
 
   return 0;
 }
@@ -126,20 +162,22 @@ int readFrame(int fd, CharBuffer* charbuffer) {
 int sendControlFrame(int fd, ControlTypes controlType) {
   char frame[CONTROL_FRAME_SIZE];
   createControlFrame(frame, controlType);
-  return write(fd, frame, CONTROL_FRAME_SIZE);
+  write(fd, frame, CONTROL_FRAME_SIZE);
+
+#ifdef DEBUG_PRINT_CONTROL_FRAMES
+  printf("Sent control packet ");
+  printControlType(controlType);
+  printf("\n");
+#endif
+
+  return 0;
 }
 
 void createControlFrame(char* frame, ControlTypes controlType) {
   // Frame start flag
   frame[0] = FLAG;
-
   // Address Field
-  frame[1] = AF1;
-  if (linkType == RECEIVER && isControlCommand(controlType))
-    frame[1] = AF2;
-  else if (linkType == TRANSMITTER && !isControlCommand(controlType))
-    frame[1] = AF2;
-
+  frame[1] = getAddressField(linkType, controlType);
   // Control Field
   frame[2] = controlType;
   // BCC Field (Address Field ^ Control Field)
@@ -148,9 +186,48 @@ void createControlFrame(char* frame, ControlTypes controlType) {
   frame[4] = FLAG;
 }
 
+char getAddressField(LinkType lnk, ControlTypes type) {
+  if (lnk == RECEIVER && isControlCommand(type))
+    return AF2;
+  else if (lnk == TRANSMITTER && !isControlCommand(type))
+    return AF2;
+  return AF1;
+}
+
 bool isControlCommand(ControlTypes type) {
   if (type == INF || type == DISC || type == SET) return true;
   return false;
+}
+
+void printControlType(ControlTypes type) {
+  switch (type) {
+    case INF: {
+      printf("INF");
+      break;
+    }
+    case SET: {
+      printf("SET");
+      break;
+    }
+    case DISC: {
+      printf("DISC");
+      break;
+    }
+    case UA: {
+      printf("UA");
+      break;
+    }
+    case RR: {
+      printf("RR");
+      break;
+    }
+    case REJ: {
+      printf("REJ");
+      break;
+    }
+    default:
+      break;
+  }
 }
 
 int initSerialPort(int port, LinkType type) {
