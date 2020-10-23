@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
+#include <signal.h>
 #include "CharBuffer.h"
 
 // DEBUG
@@ -27,6 +28,8 @@
 /* Serial Port */
 #define DEFAULT_BAUDRATE B38400
 #define MAX_PORT_LENGTH 20
+#define MAX_TRANSMISSION_ATTEMPS 3
+#define TIMEOUT_DURATION 2
 
 /*  Port name prefix */
 #ifdef __linux__
@@ -66,6 +69,34 @@ typedef enum {
 /* Globals */
 static LinkLayer ll;
 static LinkType linkType;
+volatile bool alarmTriggered;
+volatile unsigned int transmissionAttemps = 0;
+
+/* Alarm */
+void alarmHandler(int signum) {
+  if (signum == SIGALRM) {
+    ++transmissionAttemps;
+    alarmTriggered = true;
+    printf("Connection timed out, retrying...\n");
+  }
+}
+void setAlarm(unsigned int seconds) {
+  alarmTriggered = false;
+  alarm(seconds);
+}
+
+void setAlarmHandler() {
+  signal(SIGALRM, alarmHandler);
+  alarmTriggered = false;
+  transmissionAttemps = 0;
+}
+
+void resetAlarmHandler() {
+  alarm(0);
+  signal(SIGALRM, NULL);
+  alarmTriggered = false;
+  transmissionAttemps = 0;
+}
 
 /* Auxiliar Functions Declarations */
 int initSerialPort(int port, LinkType type);
@@ -84,23 +115,32 @@ int llopen(int port, LinkType type) {
   if (fd == -1) return fd;
 
   if (linkType == TRANSMITTER) {
-    if (sendControlFrame(fd, SET) == -1) {
-      printf("llopen failed to send SET Packet");
-      return -1;
-    } else {
-      if (readControlFrame(fd, UA) == -1) {
-        printf("llopen timed out");
+    setAlarmHandler();
+    while (transmissionAttemps < ll.numTransmissions) {
+      int ret = sendControlFrame(fd, SET);
+      if (ret == -1) {
+        printf("llopen failed to send SET Packet");
         return -1;
       }
+      setAlarm(ll.timeout);
+      ret = readControlFrame(fd, UA);
+      if (ret == 0) {
+        resetAlarmHandler();
+        return 0;
+      }
     }
-  } else if (linkType == RECEIVER) {
-    CharBuffer buffer;
+    resetAlarmHandler();
+    printf("llopen failed: timed out\n");
+    return -1;
+  }
+  // Q: TIMEOUT ON RECEIVER?
+  if (linkType == RECEIVER) {
     if (readControlFrame(fd, SET) == -1) {
-      printf("llopen timed out");
+      printf("llopen timed out\n");
       return -1;
     } else {
       if (sendControlFrame(fd, UA) == -1)
-        printf("llopen failed to send UA Packet");
+        printf("llopen failed to send UA Packet\n");
       return -1;
     }
   }
@@ -119,16 +159,19 @@ int validateControlFrame(CharBuffer* charbuffer, ControlTypes type) {
   char expectedAF = getAddressField(linkType ^ 1, type);
   if (charbuffer->buffer[FSFIELD] != FLAG) return -1;
   if (charbuffer->buffer[AFIELD] != expectedAF) return -1;
-  if (charbuffer->buffer[CFIELD] != type) return -1;
-  if (charbuffer->buffer[BCC1FIELD] != (expectedAF ^ type)) return -1;
-  if (charbuffer->buffer[FEFIELD] != FLAG) return -1;
+  if (charbuffer->buffer[CFIELD] != (char)type) return -1;
+  if (charbuffer->buffer[BCC1FIELD] != (char)(expectedAF ^ type)) return -1;
+  if (charbuffer->buffer[FEFIELD] != (char)FLAG) return -1;
 
   return 0;
 }
 
 int readControlFrame(int fd, ControlTypes controlType) {
   CharBuffer charbuffer;
-  if (readFrame(fd, &charbuffer) != 0) return -1;
+  if (readFrame(fd, &charbuffer) == -1) {
+    CharBuffer_destroy(&charbuffer);
+    return -1;
+  }
   if (validateControlFrame(&charbuffer, controlType) == -1) return -1;
   CharBuffer_destroy(&charbuffer);
 
@@ -148,8 +191,11 @@ int readFrame(int fd, CharBuffer* charbuffer) {
   char incByte = 0x00;
   int readStatus = 0;
   // Clear buffer and wait for a flag
-  while (readStatus == 0 || incByte != FLAG)  // TO-DO Implement timeout
+  while (readStatus == 0 || incByte != FLAG) {  // TO-DO Implement timeout
+    if (alarmTriggered) return -1;
+
     readStatus = read(fd, &incByte, 1);
+  }
   CharBuffer_push(charbuffer, incByte);
   // Reset vars
   readStatus = 0;
@@ -157,6 +203,8 @@ int readFrame(int fd, CharBuffer* charbuffer) {
   // Read serial until flag is found
   while (incByte != FLAG) {
     readStatus = read(fd, &incByte, 1);
+    printf("%d\n", readStatus);
+    if (alarmTriggered) return -1;
     if (readStatus == 0) continue;
 
     CharBuffer_push(charbuffer, incByte);
@@ -184,15 +232,10 @@ int sendControlFrame(int fd, ControlTypes controlType) {
 }
 
 void createControlFrame(char* frame, ControlTypes controlType) {
-  // Frame start flag
   frame[0] = FLAG;
-  // Address Field
   frame[1] = getAddressField(linkType, controlType);
-  // Control Field
   frame[2] = controlType;
-  // BCC Field (Address Field ^ Control Field)
-  frame[3] = frame[1] ^ frame[2];
-  // Frame end flag
+  frame[3] = frame[1] ^ frame[2];  // BCC Field (Address Field ^ Control Field)
   frame[4] = FLAG;
 }
 
@@ -244,6 +287,8 @@ int initSerialPort(int port, LinkType type) {
   // Init ll struct
   snprintf(ll.port, MAX_PORT_LENGTH, "%s%d", PORT_NAME, port);
   ll.baudRate = DEFAULT_BAUDRATE;
+  ll.numTransmissions = MAX_TRANSMISSION_ATTEMPS;
+  ll.timeout = TIMEOUT_DURATION;
   linkType = type;
 
   int fd = open(ll.port, O_RDWR | O_NOCTTY);
