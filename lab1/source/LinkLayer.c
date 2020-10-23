@@ -1,4 +1,3 @@
-/*Non-Canonical Input Processing*/
 #include "LinkLayer.h"
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -85,15 +84,26 @@ int llopen(int port, LinkType type) {
   if (fd == -1) return fd;
 
   if (linkType == TRANSMITTER) {
-    sendControlFrame(fd, SET);
-    readControlFrame(fd, UA);
+    if (sendControlFrame(fd, SET) == -1) {
+      printf("llopen failed to send SET Packet");
+      return -1;
+    } else {
+      if (readControlFrame(fd, UA) == -1) {
+        printf("llopen timed out");
+        return -1;
+      }
+    }
   } else if (linkType == RECEIVER) {
     CharBuffer buffer;
-    if (readControlFrame(fd, SET) == 0) sendControlFrame(fd, UA);
+    if (readControlFrame(fd, SET) == -1) {
+      printf("llopen timed out");
+      return -1;
+    } else {
+      if (sendControlFrame(fd, UA) == -1)
+        printf("llopen failed to send UA Packet");
+      return -1;
+    }
   }
-
-  // TODO: SEND AND READ CONTROL FRAME DEPENDING ON TRANS/RECEIVER
-
   return fd;
 }
 
@@ -162,7 +172,7 @@ int readFrame(int fd, CharBuffer* charbuffer) {
 int sendControlFrame(int fd, ControlTypes controlType) {
   char frame[CONTROL_FRAME_SIZE];
   createControlFrame(frame, controlType);
-  write(fd, frame, CONTROL_FRAME_SIZE);
+  if (write(fd, frame, CONTROL_FRAME_SIZE) == -1) return -1;
 
 #ifdef DEBUG_PRINT_CONTROL_FRAMES
   printf("Sent control packet ");
