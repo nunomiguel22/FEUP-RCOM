@@ -203,7 +203,6 @@ int readFrame(int fd, CharBuffer* charbuffer) {
   // Read serial until flag is found
   while (incByte != FLAG) {
     readStatus = read(fd, &incByte, 1);
-    printf("%d\n", readStatus);
     if (alarmTriggered) return -1;
     if (readStatus == 0) continue;
 
@@ -291,7 +290,7 @@ int initSerialPort(int port, LinkType type) {
   ll.timeout = TIMEOUT_DURATION;
   linkType = type;
 
-  int fd = open(ll.port, O_RDWR | O_NOCTTY);
+  int fd = open(ll.port, O_RDWR | O_NOCTTY | O_NONBLOCK);
   if (fd < 0) {
     perror(ll.port);
     exit(-1);
@@ -312,8 +311,8 @@ int initSerialPort(int port, LinkType type) {
   /* set input mode (non-canonical, no echo,...) */
   newtio.c_lflag = 0;
 
-  newtio.c_cc[VTIME] = 0; /* inter-character timer unused */
-  newtio.c_cc[VMIN] = 5;  /* blocking read until 5 chars received */
+  newtio.c_cc[VTIME] = ll.timeout * 10; /* inter-character timer unused */
+  newtio.c_cc[VMIN] = 5; /* blocking read until 5 chars received */
 
   /*
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
