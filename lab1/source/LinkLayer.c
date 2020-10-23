@@ -29,7 +29,7 @@
 #define DEFAULT_BAUDRATE B38400
 #define MAX_PORT_LENGTH 20
 #define MAX_TRANSMISSION_ATTEMPS 3
-#define TIMEOUT_DURATION 2
+#define TIMEOUT_DURATION 5
 
 /*  Port name prefix */
 #ifdef __linux__
@@ -102,6 +102,7 @@ void resetAlarmHandler() {
 int initSerialPort(int port, LinkType type);
 bool isControlCommand(ControlTypes type);
 void createControlFrame(char* frame, ControlTypes controlType);
+int exchangeControlFrame(int fd, ControlTypes send, ControlFrameField receive);
 int readControlFrame(int fd, ControlTypes controlType);
 int sendControlFrame(int fd, ControlTypes controlType);
 int readFrame(int fd, CharBuffer* charbuffer);
@@ -115,25 +116,9 @@ int llopen(int port, LinkType type) {
   if (fd == -1) return fd;
 
   if (linkType == TRANSMITTER) {
-    setAlarmHandler();
-    while (transmissionAttemps < ll.numTransmissions) {
-      int ret = sendControlFrame(fd, SET);
-      if (ret == -1) {
-        printf("llopen failed to send SET Packet");
-        return -1;
-      }
-      setAlarm(ll.timeout);
-      ret = readControlFrame(fd, UA);
-      if (ret == 0) {
-        resetAlarmHandler();
-        return 0;
-      }
-    }
-    resetAlarmHandler();
-    printf("llopen failed: timed out\n");
-    return -1;
+    int ret = exchangeControlFrame(fd, SET, UA);
+    if (ret == -1) printf("LLOPEN failed\n");
   }
-  // Q: TIMEOUT ON RECEIVER?
   if (linkType == RECEIVER) {
     if (readControlFrame(fd, SET) == -1) {
       printf("llopen timed out\n");
@@ -147,7 +132,29 @@ int llopen(int port, LinkType type) {
   return fd;
 }
 
-int llclose(int fd);
+int llclose(int fd) {
+  if (linkType == TRANSMITTER) {
+    int ret = exchangeControlFrame(fd, DISC, DISC);
+    if (ret == -1) {
+      printf("LLCLOSE failed\n");
+      return -1;
+    }
+    ret = sendControlFrame(fd, UA);
+    return 0;
+  }
+  if (linkType == RECEIVER) {
+    if (readControlFrame(fd, DISC) == -1) {
+      printf("LLCLOSE FAILED\n");
+      return -1;
+    }
+    int ret = exchangeControlFrame(fd, DISC, UA);
+    if (ret == -1) {
+      printf("LLCLOSE failed\n");
+      return -1;
+    }
+  }
+  return 0;
+}
 int llwrite(int fd, char* buffer, int length);
 int llread(int fd, char* buffer);
 
@@ -164,6 +171,26 @@ int validateControlFrame(CharBuffer* charbuffer, ControlTypes type) {
   if (charbuffer->buffer[FEFIELD] != (char)FLAG) return -1;
 
   return 0;
+}
+
+int exchangeControlFrame(int fd, ControlTypes send, ControlFrameField receive) {
+  setAlarmHandler();
+  while (transmissionAttemps < ll.numTransmissions) {
+    int ret = sendControlFrame(fd, send);
+    if (ret == -1) {
+      printf("Failed to send frame");
+      return -1;
+    }
+    setAlarm(ll.timeout);
+    ret = readControlFrame(fd, receive);
+    if (ret == 0) {
+      resetAlarmHandler();
+      return 0;
+    }
+  }
+  resetAlarmHandler();
+  printf("Connection timed out\n");
+  return -1;
 }
 
 int readControlFrame(int fd, ControlTypes controlType) {
@@ -191,9 +218,8 @@ int readFrame(int fd, CharBuffer* charbuffer) {
   char incByte = 0x00;
   int readStatus = 0;
   // Clear buffer and wait for a flag
-  while (readStatus == 0 || incByte != FLAG) {  // TO-DO Implement timeout
+  while (readStatus <= 0 || incByte != FLAG) {  // TO-DO Implement timeout
     if (alarmTriggered) return -1;
-
     readStatus = read(fd, &incByte, 1);
   }
   CharBuffer_push(charbuffer, incByte);
@@ -204,7 +230,7 @@ int readFrame(int fd, CharBuffer* charbuffer) {
   while (incByte != FLAG) {
     readStatus = read(fd, &incByte, 1);
     if (alarmTriggered) return -1;
-    if (readStatus == 0) continue;
+    if (readStatus <= 0) continue;
 
     CharBuffer_push(charbuffer, incByte);
   }
