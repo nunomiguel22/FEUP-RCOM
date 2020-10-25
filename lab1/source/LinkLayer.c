@@ -12,8 +12,11 @@
 #include "CharBuffer.h"
 
 // DEBUG
-#define DEBUG_PRINT_CONTROL_FRAMES
-//#define DEBUG_PRINT_FRAMES
+//#define DEBUG_PRINT_BUFFER //Print hexadecimal value for each received frame
+#define DEBUG_PRINT_FRAMES       // Print the control type of each frame
+#define DEBUG_PRINT_INFORMATION  // General Information and errors in the ll
+
+#define DEBUG_PRINT_ERROR(msg) fprintf(stderr, "llerror: %s\n", msg)
 
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
@@ -29,7 +32,7 @@
 #define DEFAULT_BAUDRATE B38400
 #define MAX_PORT_LENGTH 20
 #define MAX_TRANSMISSION_ATTEMPS 3
-#define TIMEOUT_DURATION 5
+#define TIMEOUT_DURATION 2
 
 /*  Port name prefix */
 #ifdef __linux__
@@ -63,21 +66,48 @@ typedef enum {
   AFIELD = 0x01,     // Address
   CFIELD = 0x02,     // Control
   BCC1FIELD = 0x03,  // BCC1
-  FEFIELD = 0x04     // End Flag
 } ControlFrameField;
 
-/* Globals */
 static LinkLayer ll;
 static LinkType linkType;
 volatile bool alarmTriggered;
 volatile unsigned int transmissionAttemps = 0;
 
-/* Alarm */
+/* Declarations */
+// Alarm
+void alarmHandler(int signum);
+void setAlarm(unsigned int seconds);
+void setAlarmHandler();
+void resetAlarmHandler();
+bool wasAlarmTriggered();
+// Link Layer
+int llopenTransmitter(int fd);
+int llopenReceiver(int fd);
+int exchangeFrame(int fd, CharBuffer *frame, ControlTypes reply);
+int sendFrame(int fd, CharBuffer *frame);
+int readFrame(int fd, CharBuffer *frame);
+int validateControlFrame(CharBuffer *frame);
+void buildControlFrame(CharBuffer *frame, ControlTypes type);
+char getAddressField(LinkType lnk, ControlTypes type);
+bool isControlCommand(ControlTypes type);
+bool isFrameControlType(CharBuffer *frame, ControlTypes type);
+void printControlType(ControlTypes type);
+// Serial Port
+int initSerialPort(int port, LinkType type);
+
+/* Definitions */
+
+/**
+ *
+ *
+ * ALARM
+ *
+ */
+
 void alarmHandler(int signum) {
   if (signum == SIGALRM) {
     ++transmissionAttemps;
     alarmTriggered = true;
-    printf("Connection timed out, retrying...\n");
   }
 }
 void setAlarm(unsigned int seconds) {
@@ -98,167 +128,284 @@ void resetAlarmHandler() {
   transmissionAttemps = 0;
 }
 
-/* Auxiliar Functions Declarations */
-int initSerialPort(int port, LinkType type);
-bool isControlCommand(ControlTypes type);
-void createControlFrame(char* frame, ControlTypes controlType);
-int exchangeControlFrame(int fd, ControlTypes send, ControlFrameField receive);
-int readControlFrame(int fd, ControlTypes controlType);
-int sendControlFrame(int fd, ControlTypes controlType);
-int readFrame(int fd, CharBuffer* charbuffer);
-int validateControlFrame(CharBuffer* charbuffer, ControlTypes type);
-char getAddressField(LinkType lnk, ControlTypes type);
-void printControlType(ControlTypes type);
+bool wasAlarmTriggered() {
+  if (alarmTriggered) {
+#ifdef DEBUG_PRINT_INFORMATION
+    DEBUG_PRINT_ERROR("Connection timed out...");
+#endif
+    return true;
+  }
+  return false;
+}
 
-/* Link Layer Functions */
+/**
+ *
+ *
+ * LINK LAYER
+ *
+ */
+
 int llopen(int port, LinkType type) {
   int fd = initSerialPort(port, type);
-  if (fd == -1) return fd;
+  if (fd == -1) return -1;
 
-  if (linkType == TRANSMITTER) {
-    int ret = exchangeControlFrame(fd, SET, UA);
-    if (ret == -1) printf("Link Layer: LLOPEN failed\n");
-    return fd;
-  }
-  if (linkType == RECEIVER) {
-    printf("Link Layer: Waiting for connection\n");
-    if (readControlFrame(fd, SET) == -1) {
-      printf("Link Layer: LLOPEN Failed\n");
-      return -1;
-    } else
-      sendControlFrame(fd, UA);
-  }
-  return fd;
+  if (type == TRANSMITTER) return llopenTransmitter(fd);
+  return llopenReceiver(fd);
 }
 
 int llclose(int fd) {
   if (linkType == TRANSMITTER) {
-    int ret = exchangeControlFrame(fd, DISC, DISC);
-    if (ret == -1) {
-      printf("Link Layer: LLCLOSE failed\n");
+    sleep(20);
+    // Send Disc, receive DISC
+    CharBuffer discFrame;
+    buildControlFrame(&discFrame, DISC);
+    if (exchangeFrame(fd, &discFrame, DISC) == -1) {
+#ifdef DEBUG_PRINT_INFORMATION
+      DEBUG_PRINT_ERROR("llclose failed to communicate disconnect");
+#endif
+      CharBuffer_destroy(&discFrame);
+      close(fd);
       return -1;
     }
-    sendControlFrame(fd, UA);
-    return 0;
+    CharBuffer_destroy(&discFrame);
+    // Send UA
+    CharBuffer uaFrame;
+    buildControlFrame(&uaFrame, UA);
+    sendFrame(fd, &uaFrame);
+    CharBuffer_destroy(&uaFrame);
+#ifdef DEBUG_PRINT_INFORMATION
+    printf("llclose: Disconnected.\n");
+#endif
+    close(fd);
+    return 1;
   }
+
   if (linkType == RECEIVER) {
-    if (readControlFrame(fd, DISC) == -1) {
-      printf("Link Layer: LLCLOSE FAILED\n");
+    // Receive DISC
+    setAlarmHandler();
+    setAlarm(ll.timeout * 5);
+    while (true) {
+      CharBuffer replyFrame;
+      int res = readFrame(fd, &replyFrame);
+      // Timeout or invalid frame received
+      if (res == -1) {
+        CharBuffer_destroy(&replyFrame);
+        resetAlarmHandler();
+#ifdef DEBUG_PRINT_INFORMATION
+        DEBUG_PRINT_ERROR("llclose failed to communicate disconnect");
+#endif
+        close(fd);
+        return -1;
+      }
+      if (isFrameControlType(&replyFrame, DISC)) {
+        CharBuffer_destroy(&replyFrame);
+        break;
+      }
+      CharBuffer_destroy(&replyFrame);
+    }
+    resetAlarmHandler();
+
+    // Send DISC, receive UA
+    CharBuffer discFrame;
+    buildControlFrame(&discFrame, DISC);
+    if (exchangeFrame(fd, &discFrame, UA) == -1) {
+      CharBuffer_destroy(&discFrame);
+#ifdef DEBUG_PRINT_INFORMATION
+      DEBUG_PRINT_ERROR("llclose failed to communicate disconnect");
+#endif
+      close(fd);
       return -1;
     }
-    int ret = exchangeControlFrame(fd, DISC, UA);
-    if (ret == -1) {
-      printf("Link Layer: LLCLOSE failed\n");
-      return -1;
-    }
+    CharBuffer_destroy(&discFrame);
+    close(fd);
+#ifdef DEBUG_PRINT_INFORMATION
+    printf("llclose: Disconnected.\n");
+#endif
+    return 1;
   }
-  close(fd);
-  return 0;
-}
-int llwrite(int fd, char* buffer, int length);
-int llread(int fd, char* buffer);
-
-/* Auxiliar Functions */
-int validateControlFrame(CharBuffer* charbuffer, ControlTypes type) {
-  if (charbuffer == NULL) return -1;
-  if (charbuffer->size != CONTROL_FRAME_SIZE) return -1;
-
-  char expectedAF = getAddressField(linkType ^ 1, type);
-  if (charbuffer->buffer[FSFIELD] != FLAG) return -1;
-  if (charbuffer->buffer[AFIELD] != expectedAF) return -1;
-  if (charbuffer->buffer[CFIELD] != (char)type) return -1;
-  if (charbuffer->buffer[BCC1FIELD] != (char)(expectedAF ^ type)) return -1;
-  if (charbuffer->buffer[FEFIELD] != (char)FLAG) return -1;
-
-  return 0;
+#ifdef DEBUG_PRINT_INFORMATION
+  printf("llclose: Disconnected.\n");
+#endif
+  return 1;
 }
 
-int exchangeControlFrame(int fd, ControlTypes send, ControlFrameField receive) {
+/**
+ *
+ *
+ * LINK LAYER AUXILIAR
+ *
+ */
+
+int llopenTransmitter(int fd) {
+  ll.sequenceNumber = 0;
+  CharBuffer setFrame;
+  buildControlFrame(&setFrame, SET);
+  if (exchangeFrame(fd, &setFrame, UA) == -1) {
+    CharBuffer_destroy(&setFrame);
+    return -1;
+  }
+  CharBuffer_destroy(&setFrame);
+#ifdef DEBUG_PRINT_INFORMATION
+  printf("llopen: Connected.\n");
+#endif
+  return fd;
+}
+
+int llopenReceiver(int fd) {
+  while (true) {
+#ifdef DEBUG_PRINT_INFORMATION
+    printf("llopen: Wainting for connection\n");
+#endif
+
+    ControlTypes type = DISC;
+    while (type != SET) {
+      CharBuffer setFrame;
+      if (readFrame(fd, &setFrame) == -1) continue;
+
+      type = setFrame.buffer[CFIELD];
+      CharBuffer_destroy(&setFrame);
+    }
+
+    CharBuffer uaFrame;
+    buildControlFrame(&uaFrame, UA);
+    sendFrame(fd, &uaFrame);
+    CharBuffer_destroy(&uaFrame);
+#ifdef DEBUG_PRINT_INFORMATION
+    printf("llopen: Connected.\n");
+#endif
+    return fd;
+  }
+}
+
+/*
+ *
+ *
+ * FRAMES
+ *
+ */
+
+int exchangeFrame(int fd, CharBuffer *frame, ControlTypes reply) {
   setAlarmHandler();
   while (transmissionAttemps < ll.numTransmissions) {
-    sendControlFrame(fd, send);
-
+    sendFrame(fd, frame);
     setAlarm(ll.timeout);
-    int ret = readControlFrame(fd, receive);
-    if (ret == 0) {
-      resetAlarmHandler();
-      return 0;
+
+    while (true) {
+      CharBuffer replyFrame;
+      int res = readFrame(fd, &replyFrame);
+      // Timeout or invalid frame received
+      if (res == -1) {
+        CharBuffer_destroy(&replyFrame);
+        break;
+      }
+      // Received REJ, resend frame
+      if (isFrameControlType(&replyFrame, REJ)) {
+        CharBuffer_destroy(&replyFrame);
+#ifdef DEBUG_PRINT_INFORMATION
+        DEBUG_PRINT_ERROR("Frame Rejected by receiver");
+#endif
+        ++transmissionAttemps;
+        break;
+      }
+      // Exchange was sucessful
+      if (isFrameControlType(&replyFrame, reply)) {
+        CharBuffer_destroy(&replyFrame);
+        resetAlarmHandler();
+        return 0;
+      }
     }
   }
+
   resetAlarmHandler();
-  printf("Link Layer: Connection timed out\n");
+#ifdef DEBUG_PRINT_INFORMATION
+  DEBUG_PRINT_ERROR("Exceeded transmission attempts, connection failed");
+#endif
+
   return -1;
 }
 
-int readControlFrame(int fd, ControlTypes controlType) {
-  CharBuffer charbuffer;
-  if (readFrame(fd, &charbuffer) == -1) {
-    CharBuffer_destroy(&charbuffer);
-    return -1;
-  }
-  if (validateControlFrame(&charbuffer, controlType) == -1) return -1;
-  CharBuffer_destroy(&charbuffer);
+int sendFrame(int fd, CharBuffer *frame) {
+  write(fd, frame->buffer, frame->size);
 
-#ifdef DEBUG_PRINT_CONTROL_FRAMES
-  printf("Link Layer: Received control packet ");
-  printControlType(controlType);
+#ifdef DEBUG_PRINT_FRAMES
+  printf("ll: Sent packet ");
+  printControlType(frame->buffer[CFIELD]);
   printf("\n");
 #endif
 
   return 0;
 }
 
-int readFrame(int fd, CharBuffer* charbuffer) {
-  if (charbuffer == NULL) return -1;
-  CharBuffer_init(charbuffer, CONTROL_FRAME_SIZE);
+int readFrame(int fd, CharBuffer *frame) {
+  if (frame == NULL) return -1;
+  CharBuffer_init(frame, CONTROL_FRAME_SIZE);
 
   char incByte = 0x00;
   int readStatus = 0;
   // Clear buffer and wait for a flag
   while (readStatus <= 0 || incByte != FLAG) {  // TO-DO Implement timeout
-    if (alarmTriggered) return -1;
+    if (wasAlarmTriggered()) return -1;
     readStatus = read(fd, &incByte, 1);
   }
-  CharBuffer_push(charbuffer, incByte);
+  CharBuffer_push(frame, incByte);
   // Reset vars
   readStatus = 0;
   incByte = 0x00;
   // Read serial until flag is found
   while (incByte != FLAG) {
     readStatus = read(fd, &incByte, 1);
-    if (alarmTriggered) return -1;
+    if (wasAlarmTriggered()) return -1;
     if (readStatus <= 0) continue;
 
-    CharBuffer_push(charbuffer, incByte);
+    CharBuffer_push(frame, incByte);
+  }
+
+#ifdef DEBUG_PRINT_BUFFER
+  CharBuffer_printHex(frame);
+#endif
+
+  if (validateControlFrame(frame) == -1) {
+#ifdef DEBUG_PRINT_INFORMATION
+    DEBUG_PRINT_ERROR("Invalid frame");
+#endif
   }
 
 #ifdef DEBUG_PRINT_FRAMES
-  CharBuffer_printHex(charbuffer);
-#endif
-
-  return 0;
-}
-
-int sendControlFrame(int fd, ControlTypes controlType) {
-  char frame[CONTROL_FRAME_SIZE];
-  createControlFrame(frame, controlType);
-  write(fd, frame, CONTROL_FRAME_SIZE);
-
-#ifdef DEBUG_PRINT_CONTROL_FRAMES
-  printf("Link Layer: Sent control packet ");
-  printControlType(controlType);
+  printf("ll: Received control packet ");
+  printControlType(frame->buffer[CFIELD]);
   printf("\n");
 #endif
 
   return 0;
 }
 
-void createControlFrame(char* frame, ControlTypes controlType) {
-  frame[0] = FLAG;
-  frame[1] = getAddressField(linkType, controlType);
-  frame[2] = controlType;
-  frame[3] = frame[1] ^ frame[2];  // BCC Field (Address Field ^ Control Field)
-  frame[4] = FLAG;
+int validateControlFrame(CharBuffer *frame) {
+  if (frame == NULL || frame->buffer == NULL) return -1;
+  if (frame->size != CONTROL_FRAME_SIZE) return -1;
+  // Start Flag
+  if (frame->buffer[FSFIELD] != FLAG) return -1;
+  // Check address
+  char expectedAF = getAddressField(linkType ^ 1, frame->buffer[CFIELD]);
+  if (frame->buffer[AFIELD] != expectedAF) return -1;
+  // Check BCC1
+  if (frame->buffer[BCC1FIELD] != (char)(expectedAF ^ frame->buffer[CFIELD]))
+    return -1;
+  if (frame->buffer[frame->size - 1] != (char)FLAG)
+    return -1;  // Last element flag
+
+  return 0;
+}
+
+void buildControlFrame(CharBuffer *frame, ControlTypes type) {
+  CharBuffer_init(frame, CONTROL_FRAME_SIZE);
+  CharBuffer_push(frame, FLAG);                             // FLAG
+  CharBuffer_push(frame, getAddressField(linkType, type));  // ADDRESS
+
+  if (type == RR || type == REJ) type |= ll.sequenceNumber << 7;  // N(r)
+
+  CharBuffer_push(frame, type);                                 // Control type
+  CharBuffer_push(frame, frame->buffer[1] ^ frame->buffer[2]);  // BCC1
+  CharBuffer_push(frame, FLAG);                                 // FLAG
 }
 
 char getAddressField(LinkType lnk, ControlTypes type) {
@@ -272,6 +419,12 @@ char getAddressField(LinkType lnk, ControlTypes type) {
 bool isControlCommand(ControlTypes type) {
   if (type == INF || type == DISC || type == SET) return true;
   return false;
+}
+
+bool isFrameControlType(CharBuffer *frame, ControlTypes type) {
+  if (frame == NULL || frame->buffer == NULL) return false;
+
+  return frame->buffer[CFIELD] == (char)type;
 }
 
 void printControlType(ControlTypes type) {
@@ -305,11 +458,12 @@ void printControlType(ControlTypes type) {
   }
 }
 
-void flushSerial(int fd) {
-  int ret = 3;
-  char tempchar;
-  while (ret >= 0) ret = read(fd, &tempchar, 1);
-}
+/**
+ *
+ *
+ * SERIAL PORT
+ *
+ */
 
 int initSerialPort(int port, LinkType type) {
   // Init ll struct
@@ -355,7 +509,10 @@ int initSerialPort(int port, LinkType type) {
     exit(-1);
   }
 
-  flushSerial(fd);
+  /* Empty serial port buffer */
+  int ret = 3;
+  char tempchar;
+  while (ret >= 0) ret = read(fd, &tempchar, 1);
 
   return fd;
 }
