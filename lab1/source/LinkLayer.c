@@ -152,6 +152,7 @@ int llclose(int fd) {
       return -1;
     }
   }
+  close(fd);
   return 0;
 }
 int llwrite(int fd, char* buffer, int length);
