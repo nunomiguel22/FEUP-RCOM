@@ -2,87 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug",
+            "name": "WSL - RECEIVER",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}\\RCOM",
-            "args": [],
-            "stopAtEntry": false,
-            "linux": {
-                "cwd": "${workspaceFolder}",
-                "environment": [],
-                "externalConsole": false, //set to true to see output in cmd instead
-                "MIMode": "gdb",
-                "setupCommands": [
-                    {
-                        "description": "Enable pretty-printing for gdb",
-                        "text": "-enable-pretty-printing",
-                        "ignoreFailures": true
-                    }
-                ],
-                "preLaunchTask": "Build - Debug"
-            },
-            "windows": {
-                "cwd": "${workspaceFolder}",
-                "environment": [],
-                "externalConsole": false, //set to true to see output in cmd instead
-                "MIMode": "gdb",
-                "miDebuggerPath": "${env:MINGW_HOME}\\bin\\gdb.exe",
-                "setupCommands": [
-                    {
-                        "description": "Enable pretty-printing for gdb",
-                        "text": "-enable-pretty-printing",
-                        "ignoreFailures": true
-                    }
-                ],
-                "preLaunchTask": "Build - Debug"
-            },
-        },
-        {
-            "name": "Run",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}\\RCOM",
-            "args": [],
-            "stopAtEntry": false,
-            "linux": {
-                "cwd": "${workspaceFolder}",
-                "environment": [],
-                "externalConsole": false, //set to true to see output in cmd instead
-                "MIMode": "gdb",
-                "setupCommands": [
-                    {
-                        "description": "Enable pretty-printing for gdb",
-                        "text": "-enable-pretty-printing",
-                        "ignoreFailures": true
-                    }
-                ],
-                "preLaunchTask": "Build - Optimized"
-            },
-            "windows": {
-                "cwd": "${workspaceFolder}",
-                "environment": [],
-                "externalConsole": false, //set to true to see output in cmd instead
-                "MIMode": "gdb",
-                "miDebuggerPath": "${env:MINGW_HOME}\\bin\\gdb.exe",
-                "setupCommands": [
-                    {
-                        "description": "Enable pretty-printing for gdb",
-                        "text": "-enable-pretty-printing",
-                        "ignoreFailures": true
-                    }
-                ],
-                "preLaunchTask": "Build - Optimized"
-            },
-        },
-        {
-            "name": "WSL - Debug",
-            "type": "cppdbg",
-            "request": "launch",
-            //Full path to program
-            "program": "/mnt/f/Projects/Visual Code Projects/FEUP-RCOM/lab1/RCOM", //Change to executable path
+            "program": "/mnt/f/Projects/Visual Code Projects/FEUP-RCOM/lab1/RCOM",
             "args": [
-                //Program arguments
+                "10",
+                "R"
             ],
             "stopAtEntry": false,
             "cwd": ".",
@@ -118,13 +44,13 @@
             }
         },
         {
-            "name": "WSL - Run",
+            "name": "WSL - TRANSMITTER",
             "type": "cppdbg",
             "request": "launch",
-            //Full path to program
             "program": "/mnt/f/Projects/Visual Code Projects/FEUP-RCOM/lab1/RCOM",
             "args": [
-                //Program arguments
+                "11",
+                "T"
             ],
             "stopAtEntry": false,
             "cwd": ".",
@@ -150,7 +76,7 @@
                 }
             ],
             "targetArchitecture": "x64",
-            "preLaunchTask": "Build - WSL - Optimized",
+            "preLaunchTask": "Build - WSL - Debug",
             "sourceFileMap": {
                 "/mnt/c": "c:\\",
                 "/mnt/f/": "f:\\",
@@ -158,6 +84,6 @@
                 "\\build\\glibc-OTsEL5\\glibc-2.27\\": "F:\\Development\\Tools\\glibc-2.27",
                 "\\usr\\include\\c++\\8\\ext\\": "F:\\Development\\Tools\\MinGW\\include\\c++\\8.2.0\\ext",
             }
-        },
+        }
     ],
 }
