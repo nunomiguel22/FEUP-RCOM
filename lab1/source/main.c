@@ -1,4 +1,5 @@
 #include "LinkLayer.h"
+#include "AppLayer.h"
 #include "CharBuffer.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,9 +16,11 @@ int main(int argc, char** argv) {
   LinkType type = RECEIVER;
   if (argv[2][0] == 'T') type = TRANSMITTER;
 
-  int fd = llopen(port, type);
-
-  llclose(fd);
+  if (type == RECEIVER) {
+    receiveFile("files/downloads/large.jpg");
+  } else {
+    sendFile("files/large.jpg");
+  }
 
   return 0;
 }

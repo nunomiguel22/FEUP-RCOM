@@ -13,8 +13,8 @@
 
 // DEBUG
 //#define DEBUG_PRINT_BUFFER //Print hexadecimal value for each received frame
-#define DEBUG_PRINT_FRAMES       // Print the control type of each frame
-#define DEBUG_PRINT_INFORMATION  // General Information and errors in the ll
+//#define DEBUG_PRINT_FRAMES       // Print the control type of each frame
+//#define DEBUG_PRINT_INFORMATION  // General Information and errors in the ll
 
 #define DEBUG_PRINT_ERROR(msg) fprintf(stderr, "llerror: %s\n", msg)
 
@@ -22,17 +22,19 @@
 #define _POSIX_SOURCE 1
 
 /* Framing */
+#define INF_FRAME_SIZE 6
 #define CONTROL_FRAME_SIZE 5
-#define FLAG 0x7E  // Flag for beggining and ending of frame
-#define ESC 0x7D   // Escape character for byte stuffing
-#define AF1 0x03   // Transmitter commands, Receiver replys
-#define AF2 0x01   // Transmitter replys, Receiver commands
+#define FLAG 0x7E     // Flag for beggining and ending of frame
+#define ESC 0x7D      // Escape character for byte stuffing
+#define ESC_MOD 0x20  // Stuffing byte
+#define AF1 0x03      // Transmitter commands, Receiver replys
+#define AF2 0x01      // Transmitter replys, Receiver commands
 
 /* Serial Port */
 #define DEFAULT_BAUDRATE B38400
 #define MAX_PORT_LENGTH 20
 #define MAX_TRANSMISSION_ATTEMPS 3
-#define TIMEOUT_DURATION 2
+#define TIMEOUT_DURATION 5
 
 /*  Port name prefix */
 #ifdef __linux__
@@ -66,8 +68,10 @@ typedef enum {
   AFIELD = 0x01,     // Address
   CFIELD = 0x02,     // Control
   BCC1FIELD = 0x03,  // BCC1
+  DATAFIELD = 0x04   // Data field start
 } ControlFrameField;
 
+struct termios oldtio;
 static LinkLayer ll;
 static LinkType linkType;
 volatile bool alarmTriggered;
@@ -83,15 +87,16 @@ bool wasAlarmTriggered();
 // Link Layer
 int llopenTransmitter(int fd);
 int llopenReceiver(int fd);
-int exchangeFrame(int fd, CharBuffer *frame, ControlTypes reply);
-int sendFrame(int fd, CharBuffer *frame);
 int readFrame(int fd, CharBuffer *frame);
 int validateControlFrame(CharBuffer *frame);
 void buildControlFrame(CharBuffer *frame, ControlTypes type);
+void buildDataFrame(CharBuffer *frame, char *buffer, int length);
 char getAddressField(LinkType lnk, ControlTypes type);
 bool isControlCommand(ControlTypes type);
 bool isFrameControlType(CharBuffer *frame, ControlTypes type);
 void printControlType(ControlTypes type);
+int sendFrame(int fd, CharBuffer *frame);
+int exchangeFrame(int fd, CharBuffer *frame, ControlTypes reply);
 // Serial Port
 int initSerialPort(int port, LinkType type);
 
@@ -154,8 +159,11 @@ int llopen(int port, LinkType type) {
 }
 
 int llclose(int fd) {
+#ifdef DEBUG_PRINT_INFORMATION
+  printf("llclose: communicating disconnect\n");
+#endif
+
   if (linkType == TRANSMITTER) {
-    sleep(20);
     // Send Disc, receive DISC
     CharBuffer discFrame;
     buildControlFrame(&discFrame, DISC);
@@ -164,6 +172,7 @@ int llclose(int fd) {
       DEBUG_PRINT_ERROR("llclose failed to communicate disconnect");
 #endif
       CharBuffer_destroy(&discFrame);
+      tcsetattr(fd, TCSANOW, &oldtio);
       close(fd);
       return -1;
     }
@@ -176,6 +185,7 @@ int llclose(int fd) {
 #ifdef DEBUG_PRINT_INFORMATION
     printf("llclose: Disconnected.\n");
 #endif
+    tcsetattr(fd, TCSANOW, &oldtio);
     close(fd);
     return 1;
   }
@@ -194,6 +204,7 @@ int llclose(int fd) {
 #ifdef DEBUG_PRINT_INFORMATION
         DEBUG_PRINT_ERROR("llclose failed to communicate disconnect");
 #endif
+        tcsetattr(fd, TCSANOW, &oldtio);
         close(fd);
         return -1;
       }
@@ -213,6 +224,7 @@ int llclose(int fd) {
 #ifdef DEBUG_PRINT_INFORMATION
       DEBUG_PRINT_ERROR("llclose failed to communicate disconnect");
 #endif
+      tcsetattr(fd, TCSANOW, &oldtio);
       close(fd);
       return -1;
     }
@@ -221,12 +233,85 @@ int llclose(int fd) {
 #ifdef DEBUG_PRINT_INFORMATION
     printf("llclose: Disconnected.\n");
 #endif
+    tcsetattr(fd, TCSANOW, &oldtio);
     return 1;
   }
 #ifdef DEBUG_PRINT_INFORMATION
   printf("llclose: Disconnected.\n");
 #endif
+  tcsetattr(fd, TCSANOW, &oldtio);
   return 1;
+}
+
+int llwrite(int fd, char *buffer, int length) {
+  CharBuffer frame;
+  buildDataFrame(&frame, buffer, length);
+  if (exchangeFrame(fd, &frame, RR) == -1) {
+#ifdef DEBUG_PRINT_INFORMATION
+    DEBUG_PRINT_ERROR("llwrite failed");
+#endif
+    CharBuffer_destroy(&frame);
+    return -1;
+  }
+  int size = frame.size;
+  ll.sequenceNumber ^= 1;
+  CharBuffer_destroy(&frame);
+  return size;
+}
+
+int llread(int fd, char **buffer) {
+  CharBuffer frame;
+  while (true) {
+    if (readFrame(fd, &frame) == -1) {
+      CharBuffer_destroy(&frame);
+      continue;
+    }
+    if ((frame.buffer[CFIELD] & 0x0F) != INF) {
+      CharBuffer_destroy(&frame);
+      continue;
+    }
+
+    if ((frame.buffer[CFIELD] >> 6) != (char)(ll.sequenceNumber ^ 1)) {
+      CharBuffer rrFrame;
+      buildControlFrame(&rrFrame, RR);
+      sendFrame(fd, &rrFrame);
+      CharBuffer_destroy(&frame);
+      continue;
+    }
+
+    CharBuffer packet;
+    CharBuffer_init(&packet, INF_FRAME_SIZE);
+
+    unsigned char bcc2 = 0x00;
+    for (unsigned int i = DATAFIELD; i < frame.size - 2; ++i) {
+      unsigned char temp;
+      if (frame.buffer[i] == ESC)
+        temp = (unsigned char)(frame.buffer[++i]) ^ ESC_MOD;
+      else
+        temp = (unsigned char)frame.buffer[i];
+
+      bcc2 ^= temp;
+      CharBuffer_push(&packet, temp);
+    }
+
+    if (bcc2 != (unsigned char)frame.buffer[frame.size - 2]) {
+      CharBuffer rejFrame;
+      buildControlFrame(&rejFrame, REJ);
+      sendFrame(fd, &rejFrame);
+      CharBuffer_destroy(&packet);
+      CharBuffer_destroy(&frame);
+      continue;
+    }
+
+    ll.sequenceNumber ^= 1;
+    CharBuffer rrFrame;
+    buildControlFrame(&rrFrame, RR);
+    sendFrame(fd, &rrFrame);
+    CharBuffer_destroy(&frame);
+    *buffer = packet.buffer;
+    return packet.size;
+  }
+  return -1;
 }
 
 /**
@@ -237,7 +322,7 @@ int llclose(int fd) {
  */
 
 int llopenTransmitter(int fd) {
-  ll.sequenceNumber = 0;
+  ll.sequenceNumber = 1;
   CharBuffer setFrame;
   buildControlFrame(&setFrame, SET);
   if (exchangeFrame(fd, &setFrame, UA) == -1) {
@@ -252,6 +337,7 @@ int llopenTransmitter(int fd) {
 }
 
 int llopenReceiver(int fd) {
+  ll.sequenceNumber = 0;
   while (true) {
 #ifdef DEBUG_PRINT_INFORMATION
     printf("llopen: Wainting for connection\n");
@@ -366,7 +452,7 @@ int readFrame(int fd, CharBuffer *frame) {
 
   if (validateControlFrame(frame) == -1) {
 #ifdef DEBUG_PRINT_INFORMATION
-    DEBUG_PRINT_ERROR("Invalid frame");
+    DEBUG_PRINT_ERROR("frame failed validation of header");
 #endif
   }
 
@@ -381,7 +467,7 @@ int readFrame(int fd, CharBuffer *frame) {
 
 int validateControlFrame(CharBuffer *frame) {
   if (frame == NULL || frame->buffer == NULL) return -1;
-  if (frame->size != CONTROL_FRAME_SIZE) return -1;
+  if (frame->size < CONTROL_FRAME_SIZE) return -1;
   // Start Flag
   if (frame->buffer[FSFIELD] != FLAG) return -1;
   // Check address
@@ -408,7 +494,31 @@ void buildControlFrame(CharBuffer *frame, ControlTypes type) {
   CharBuffer_push(frame, FLAG);                                 // FLAG
 }
 
+void buildDataFrame(CharBuffer *frame, char *buffer, int length) {
+  CharBuffer_init(frame, length + INF_FRAME_SIZE);
+  CharBuffer_push(frame, FLAG);                            // FLAG
+  CharBuffer_push(frame, getAddressField(linkType, INF));  // ADDRESS
+  CharBuffer_push(frame, INF | (ll.sequenceNumber << 6));  // Control and N(s)
+  CharBuffer_push(frame, frame->buffer[1] ^ frame->buffer[2]);  // BCC1
+
+  // Add buffer to frame and calculate bcc2
+  unsigned char bcc2 = 0x00;
+  for (int i = 0; i < length; ++i) {
+    // BCC2
+    bcc2 ^= (unsigned char)buffer[i];
+    // Byte stuffing
+    if (buffer[i] == FLAG || buffer[i] == ESC) {
+      CharBuffer_push(frame, ESC);
+      CharBuffer_push(frame, buffer[i] ^ ESC_MOD);
+    } else
+      CharBuffer_push(frame, buffer[i]);
+  }
+  CharBuffer_push(frame, bcc2);
+  CharBuffer_push(frame, FLAG);
+}
+
 char getAddressField(LinkType lnk, ControlTypes type) {
+  type &= 0x0F;
   if (lnk == RECEIVER && isControlCommand(type))
     return AF2;
   else if (lnk == TRANSMITTER && !isControlCommand(type))
@@ -417,17 +527,20 @@ char getAddressField(LinkType lnk, ControlTypes type) {
 }
 
 bool isControlCommand(ControlTypes type) {
+  type &= 0x0F;
   if (type == INF || type == DISC || type == SET) return true;
   return false;
 }
 
 bool isFrameControlType(CharBuffer *frame, ControlTypes type) {
   if (frame == NULL || frame->buffer == NULL) return false;
-
-  return frame->buffer[CFIELD] == (char)type;
+  type &= 0x0F;
+  ControlTypes frameType = frame->buffer[CFIELD] &= 0x0F;
+  return frameType == type;
 }
 
 void printControlType(ControlTypes type) {
+  type &= 0x0F;
   switch (type) {
     case INF: {
       printf("INF");
@@ -479,7 +592,7 @@ int initSerialPort(int port, LinkType type) {
     exit(-1);
   }
 
-  struct termios oldtio, newtio;
+  struct termios newtio;
 
   if (tcgetattr(fd, &oldtio) == -1) { /* save current port settings */
     perror("tcgetattr");
