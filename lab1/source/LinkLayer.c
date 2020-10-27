@@ -512,7 +512,14 @@ void buildDataFrame(CharBuffer *frame, char *buffer, int length) {
     } else
       CharBuffer_push(frame, buffer[i]);
   }
-  CharBuffer_push(frame, bcc2);
+
+  // Bytestuffin on BBC2 when needed
+  if (bcc2 == ESC || bcc2 == FLAG) {
+    CharBuffer_push(frame, ESC);
+    CharBuffer_push(frame, bcc2 ^ ESC_MOD);
+  } else
+    CharBuffer_push(frame, bcc2);
+
   CharBuffer_push(frame, FLAG);
 }
 
@@ -606,8 +613,8 @@ int initSerialPort(int port, LinkType type) {
   /* set input mode (non-canonical, no echo,...) */
   newtio.c_lflag = 0;
 
-  newtio.c_cc[VTIME] = ll.timeout * 10; /* inter-character timer unused */
-  newtio.c_cc[VMIN] = 5; /* blocking read until 5 chars received */
+  newtio.c_cc[VTIME] = 0; /* inter-character timer unused */
+  newtio.c_cc[VMIN] = 5;  /* blocking read until 5 chars received */
 
   /*
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a

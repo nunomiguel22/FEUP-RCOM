@@ -1,0 +1,30 @@
+/* TESTS */
+
+- Send random data, randomize data on packets, send random data inbetween communication
+- Generate BCC1 and BCC2(add flags to bbc2) errors
+- Simulate delays in transmission and reception
+- Send duplicate packets
+- Simulate wrong N(s) and N(r)
+- Send wrong communications to llopen, llclose, llread
+- Test sending file with special characters
+
+
+PACKET ERRORS:
+APPLICATION LAYER
+-Wrong Control Field on data packet
+-Wrong Sequence number
+-More data than expected
+-Wrong length for control packet
+
+LINK LAYER:
+-Wrong address Field
+-Unexpected control field
+-Wrong BCC1
+
+
+
+/* GENERAL */
+
+-Add configurable arguments for port, baudrate, timeout, retry attempts, linktype
+-Statistics: bits/s, baudrate, frame loss, ping
+-Report
