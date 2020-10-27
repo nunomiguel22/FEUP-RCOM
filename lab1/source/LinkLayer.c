@@ -11,11 +11,10 @@
 #include <signal.h>
 #include "CharBuffer.h"
 
-// DEBUG
+/* DEBUG FLAGS */
 //#define DEBUG_PRINT_BUFFER //Print hexadecimal value for each received frame
-//#define DEBUG_PRINT_FRAMES       // Print the control type of each frame
-//#define DEBUG_PRINT_INFORMATION  // General Information and errors in the ll
-
+#define DEBUG_PRINT_FRAMES       // Print the control type of each frame
+#define DEBUG_PRINT_INFORMATION  // General Information and errors in the ll
 #define DEBUG_PRINT_ERROR(msg) fprintf(stderr, "llerror: %s\n", msg)
 
 /* POSIX compliant source */
