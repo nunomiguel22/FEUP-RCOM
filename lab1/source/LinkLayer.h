@@ -67,10 +67,37 @@ int llwrite(int fd, char* buffer, int length);
  */
 int llread(int fd, char** buffer);
 
-/** Testing **/
+/** TESTING **/
+
+/**
+ * Builds a data frame given a buffer
+ *
+ * @param frame CharBuffer where frame will be stored
+ * @param buffer Buffer with data to frame
+ * @param length Data buffer length
+ */
 void build_data_frame(CharBuffer* frame, char* buffer, int length);
+/**
+ * Sends a buffer of raw data through the port
+ *
+ * @param fd File descriptor of the connection, given by llopen.
+ * @param buffer Buffer with data to send
+ * @param length Data buffer length
+ */
 int send_raw_data(int fd, char* buffer, int length);
+/**
+ * Initiates serial port connection
+ *
+ * @param port Number of the serial port.
+ * @param type This will set the connection type to RECEIVER or TRANSMITTER
+ * @return Number of bytes written, -1 on failure
+ */
 int init_serial_port(int port, link_type type);
+/**
+ * Closes serial port connection
+ *
+ *  @param fd File descriptor of the connection, given by llopen.
+ */
 void close_serial_port(int fd);
 
 #endif

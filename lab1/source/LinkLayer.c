@@ -11,9 +11,9 @@
 #include <stdbool.h>
 #include <signal.h>
 
-#define LL_LOG_INFORMATION
-//#define LL_LOG_BUFFER  // Print hexadecimal value for each received frame
-#define LL_LOG_FRAMES  // Print the control type of each frame
+#define LL_LOG_INFORMATION  // Log general information
+//#define LL_LOG_BUFFER  // Log entire frame
+#define LL_LOG_FRAMES  // Log frame headers
 
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
@@ -38,10 +38,10 @@
 typedef unsigned char uchar_t;
 typedef struct {
   char port[MAX_PORT_LENGTH];
-  int baudRate;
-  unsigned int sequenceNumber;
+  int baud_rate;
+  unsigned int sequence_number;
   unsigned int timeout;
-  unsigned int numTransmissions;
+  unsigned int num_transmissions;
 } link_layer;
 
 typedef enum {
@@ -199,7 +199,7 @@ int llwrite(int fd, char *buffer, int length) {
   }
 
   int size = frame.size;
-  ll.sequenceNumber ^= 1;
+  ll.sequence_number ^= 1;
   CharBuffer_destroy(&frame);
   return size;
 }
@@ -221,7 +221,7 @@ int llread(int fd, char **buffer) {
     }
 
     // Check seq number for duplicate frames
-    if ((frame.buffer[C_FIELD] >> 6) == (char)ll.sequenceNumber) {
+    if ((frame.buffer[C_FIELD] >> 6) == (char)ll.sequence_number) {
       log_msg("frame ignored - duplicate");
       send_control_frame(fd, LL_RR);
       continue;
@@ -266,7 +266,7 @@ int llread(int fd, char **buffer) {
     }
 
     // Frame read successfuly, flip seq number and reply with RR
-    ll.sequenceNumber ^= 1;
+    ll.sequence_number ^= 1;
     send_control_frame(fd, LL_RR);
     CharBuffer_destroy(&frame);
     *buffer = packet.buffer;
@@ -283,7 +283,7 @@ int llread(int fd, char **buffer) {
  */
 
 int ll_open_transmitter(int fd) {
-  ll.sequenceNumber = 1;
+  ll.sequence_number = 1;
 
   CharBuffer set_frame;
   build_control_frame(&set_frame, LL_SET);
@@ -298,7 +298,7 @@ int ll_open_transmitter(int fd) {
 }
 
 int ll_open_receiver(int fd) {
-  ll.sequenceNumber = 0;
+  ll.sequence_number = 0;
   while (true) {
     log_msg("llopen - Wainting for connection\n");
 
@@ -332,7 +332,7 @@ int ll_open_receiver(int fd) {
 
 int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
   set_alarm_handler();
-  while (transmission_attempts < ll.numTransmissions) {
+  while (transmission_attempts < ll.num_transmissions) {
     send_frame(fd, frame);
     set_alarm(ll.timeout);
 
@@ -351,7 +351,7 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
       // Verify if RR or REJ is a duplicate
       if (is_rej || is_rr) {
         uchar_t replySeq = ((uchar_t)(reply_frame.buffer[C_FIELD]) >> 7);
-        if (replySeq != (uchar_t)(ll.sequenceNumber)) {
+        if (replySeq != (uchar_t)(ll.sequence_number)) {
           log_msg("frame ignored - duplicate");
           CharBuffer_destroy(&reply_frame);
           continue;
@@ -465,7 +465,7 @@ void build_control_frame(CharBuffer *frame, ll_control_type type) {
   CharBuffer_push(frame, LL_FLAG);                         // FLAG
   CharBuffer_push(frame, get_address_field(ltype, type));  // ADDRESS
 
-  if (type == LL_RR || type == LL_REJ) type |= ll.sequenceNumber << 7;  // N(r)
+  if (type == LL_RR || type == LL_REJ) type |= ll.sequence_number << 7;  // N(r)
 
   CharBuffer_push(frame, type);                                 // Control type
   CharBuffer_push(frame, frame->buffer[1] ^ frame->buffer[2]);  // BCC1
@@ -477,7 +477,7 @@ void build_data_frame(CharBuffer *frame, char *buffer, int length) {
   CharBuffer_push(frame, LL_FLAG);                           // FLAG
   CharBuffer_push(frame, get_address_field(ltype, LL_INF));  // ADDRESS
   CharBuffer_push(frame,
-                  LL_INF | (ll.sequenceNumber << 6));  // Control and N(s)
+                  LL_INF | (ll.sequence_number << 6));  // Control and N(s)
   CharBuffer_push(frame, frame->buffer[1] ^ frame->buffer[2]);  // BCC1
 
   // Add buffer to frame and calculate bcc2
@@ -579,8 +579,8 @@ void log_frame(CharBuffer *frame) {
 int init_serial_port(int port, link_type type) {
   // Init ll struct
   snprintf(ll.port, MAX_PORT_LENGTH, "%s%d", PORT_NAME, port);
-  ll.baudRate = DEFAULT_BAUDRATE;
-  ll.numTransmissions = MAX_TRANSMISSION_ATTEMPS;
+  ll.baud_rate = DEFAULT_BAUDRATE;
+  ll.num_transmissions = MAX_TRANSMISSION_ATTEMPS;
   ll.timeout = TIMEOUT_DURATION;
   ltype = type;
 
@@ -599,7 +599,7 @@ int init_serial_port(int port, link_type type) {
   }
 
   bzero(&newtio, sizeof(newtio));
-  newtio.c_cflag = ll.baudRate | CS8 | CLOCAL | CREAD;
+  newtio.c_cflag = ll.baud_rate | CS8 | CLOCAL | CREAD;
   newtio.c_iflag = IGNPAR;
   newtio.c_oflag = 0;
 
