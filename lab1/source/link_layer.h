@@ -28,11 +28,25 @@ typedef enum {
   LL_ERROR_BAD_END_FLAG = -6
 } ll_error_code;
 
+typedef struct {
+  unsigned int frames_total;
+  unsigned int frames_rejected;
+  unsigned int frames_ignored;
+} ll_statistics;
+
 /**
  * Enum of types of Link Layer connection. RECEIVER(0x01) or TRANSMITTER(0x01).
  */
 typedef enum { TRANSMITTER = 0x00, RECEIVER = 0x01 } link_type;
 
+/**
+ * Sets connection settings
+ *
+ * @param timeout Seconds until a frame with no response times out
+ * @param max_retries Number of frame retransmission attempts until failure
+ * @param baudrate Serial port baudrate
+ */
+void ll_setup(int timeout, int max_retries, int baudrate);
 /**
  * Establish connection between ports.
  *
@@ -66,6 +80,12 @@ int llwrite(int fd, char* buffer, int length);
  * @return number of read bytes or -1 on failure
  */
 int llread(int fd, char** buffer);
+/**
+ * Statistics of transferred bytes and accepted/rejected/ignored frames
+ *
+ * @returns a struct with link layer statistics
+ */
+ll_statistics ll_get_stats();
 
 /** TESTING **/
 

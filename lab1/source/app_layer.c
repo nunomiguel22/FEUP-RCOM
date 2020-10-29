@@ -1,4 +1,4 @@
-#include "AppLayer.h"
+#include "app_layer.h"
 #include "link_layer.h"
 #include "CharBuffer.h"
 
@@ -10,6 +10,7 @@
 //#define AL_PRINT_CPACKETS
 
 #define MAX_FRAGMENT_SIZE 0xFFFF
+#define MAX_BAUDRATE 460800
 #define DATA_HEADER_SIZE 4
 #define MAX_FILE_NAME 256
 
@@ -29,36 +30,43 @@ typedef enum {
   CONTROL_START = 0x02,
   CONTROL_END = 0x03,
   CONTROL_DATA = 0x01
-} ControlType;
+} control_type;
 
 typedef struct {
-  ControlType type;
+  control_type type;
   char *name;
   int8_t nameLength;
   uint32_t size;
   uint8_t sizeLength;
-} ControlPacket;
+} control_packet;
 
 typedef struct {
-  ControlType type;
+  control_type type;
   int8_t sequenceNr;
   uint16_t size;
   char *data;
-} DataPacket;
+} data_packet;
 
-ControlPacket fileCP;  // Control Packet with file information
+control_packet fileCP;  // Control Packet with file information
+static int frag_size = MAX_FRAGMENT_SIZE;
 
-void printControlPacket(ControlPacket *packet);
-int readControlPacket(int fd, ControlPacket *packet);
-int parseControlPacket(char *packetBuffer, int size, ControlPacket *cp);
-int sendControlPacket(int fd, ControlType type);
-void buildControlPacket(ControlType type, CharBuffer *packet);
-int getFileInfo(const char *filename, FILE *fptr);
-int readDataPacket(int fd, DataPacket *packet, char *buffer);
-int sendDataPacket(int fd, DataPacket *packet);
-void printProgress(int done, int total);
+void print_control_packet(control_packet *packet);
+int read_control_packet(int fd, control_packet *packet);
+int parse_control_packet(char *packetBuffer, int size, control_packet *cp);
+int send_control_packet(int fd, control_type type);
+void build_control_packet(control_type type, CharBuffer *packet);
+int get_file_info(const char *filename, FILE *fptr);
+int read_data_packet(int fd, data_packet *packet, char *buffer);
+int send_data_packet(int fd, data_packet *packet);
+void print_progress(int done, int total);
 
-int sendFile(const char *filename) {
+void al_setup(int timeout, int baudrate, int max_retries, int frag_size) {
+  if (baudrate > MAX_BAUDRATE) baudrate = MAX_BAUDRATE;
+  if (frag_size > MAX_FRAGMENT_SIZE) frag_size = MAX_FRAGMENT_SIZE;
+  ll_setup(timeout, max_retries, baudrate);
+}
+
+int al_sendFile(const char *filename, int port) {
   int nameLength = strlen(filename);
   if (nameLength > MAX_FILE_NAME) {
     AL_PRINT_ERROR("Filename length exceeds limits(256 characters)");
@@ -74,44 +82,44 @@ int sendFile(const char *filename) {
   }
 
   // Establish LL Connection
-  int fd = llopen(11, TRANSMITTER);
+  int fd = llopen(port, TRANSMITTER);
   if (fd == -1) {
     AL_PRINT_ERROR("Failed to establish connection");
     return -1;
   }
 
   // Get File Information
-  getFileInfo(filename, fptr);
+  get_file_info(filename, fptr);
 
   // Send start control packet
-  if (sendControlPacket(fd, CONTROL_START) == -1) return -1;
+  if (send_control_packet(fd, CONTROL_START) == -1) return -1;
   printf("al: starting file transmission\n");
 
   // Send data packets until the file is read
-  DataPacket packet;
-  packet.data = (char *)malloc(MAX_FRAGMENT_SIZE + DATA_HEADER_SIZE);
+  data_packet packet;
+  packet.data = (char *)malloc(frag_size + DATA_HEADER_SIZE);
   packet.sequenceNr = 0;
   packet.size = 1;
   unsigned int bytesTransferred = 0;
   while (true) {
-    packet.size = fread(&packet.data[L1_FIELD + 1], sizeof(uchar),
-                        MAX_FRAGMENT_SIZE, fptr);
+    packet.size =
+        fread(&packet.data[L1_FIELD + 1], sizeof(uchar), frag_size, fptr);
     if (packet.size <= 0) {
       break;
     }
     ++packet.sequenceNr;
     packet.sequenceNr %= 256;
-    sendDataPacket(fd, &packet);
+    send_data_packet(fd, &packet);
 
     // Progress
     bytesTransferred += packet.size;
-    printProgress(bytesTransferred, fileCP.size);
+    print_progress(bytesTransferred, fileCP.size);
   }
   printf("\n");
   free(packet.data);
 
   // Send end control packet
-  if (sendControlPacket(fd, CONTROL_END) == -1) return -1;
+  if (send_control_packet(fd, CONTROL_END) == -1) return -1;
   printf("al: file transmission is over\n");
 
   // Close connection and cleanup
@@ -121,9 +129,9 @@ int sendFile(const char *filename) {
   return 0;
 }
 
-int receiveFile(const char *filename) {
+int al_receiveFile(const char *filename, int port) {
   // Establish LL Connection
-  int fd = llopen(10, RECEIVER);
+  int fd = llopen(port, RECEIVER);
   if (fd == -1) {
     AL_PRINT_ERROR("Failed to establish connection");
     return -1;
@@ -139,28 +147,28 @@ int receiveFile(const char *filename) {
 
   fileCP.type = CONTROL_DATA;
   while (fileCP.type != CONTROL_START) {
-    readControlPacket(fd, &fileCP);
+    read_control_packet(fd, &fileCP);
   }
   printf("al: starting file transmission\n");
 
   unsigned int bytesTransferred = 0;
-  DataPacket dataPacket;
+  data_packet data_packet;
   while (bytesTransferred < fileCP.size) {
     char *buffer = NULL;
-    if (readDataPacket(fd, &dataPacket, buffer) == -1) return -1;
+    if (read_data_packet(fd, &data_packet, buffer) == -1) return -1;
 
-    fwrite(dataPacket.data, sizeof(char), dataPacket.size, fptr);
+    fwrite(data_packet.data, sizeof(char), data_packet.size, fptr);
 
-    bytesTransferred += dataPacket.size;
+    bytesTransferred += data_packet.size;
     free(buffer);
-    printProgress(bytesTransferred, fileCP.size);
+    print_progress(bytesTransferred, fileCP.size);
   }
   printf("\n");
   // Wait for end control packet
-  ControlPacket packet;
+  control_packet packet;
   packet.type = CONTROL_DATA;
   while (packet.type != CONTROL_END) {
-    readControlPacket(fd, &packet);
+    read_control_packet(fd, &packet);
   }
   printf("al: file transmission is over\n");
   // Close connection and cleanup
@@ -169,7 +177,7 @@ int receiveFile(const char *filename) {
   return 0;
 }
 
-int readDataPacket(int fd, DataPacket *packet, char *buffer) {
+int read_data_packet(int fd, data_packet *packet, char *buffer) {
   int res = llread(fd, &buffer);
   if (res < 0) {
     AL_PRINT_ERROR("failed to read packet");
@@ -188,7 +196,7 @@ int readDataPacket(int fd, DataPacket *packet, char *buffer) {
   return 0;
 }
 
-int sendDataPacket(int fd, DataPacket *packet) {
+int send_data_packet(int fd, data_packet *packet) {
   packet->data[CP_CFIELD] = CONTROL_DATA;
   packet->data[SEQ_FIELD] = (uchar)packet->sequenceNr;
   packet->data[L2_FIELD] = (uchar)(packet->size / 256);
@@ -200,11 +208,11 @@ int sendDataPacket(int fd, DataPacket *packet) {
   return -1;
 }
 
-int sendControlPacket(int fd, ControlType type) {
+int send_control_packet(int fd, control_type type) {
   CharBuffer buffer;
-  buildControlPacket(type, &buffer);
+  build_control_packet(type, &buffer);
   printf("al: sent control Packet ");
-  printControlPacket(&fileCP);
+  print_control_packet(&fileCP);
   if (llwrite(fd, buffer.buffer, buffer.size) == -1) {
     AL_PRINT_ERROR("Failed to send packet, aborting..");
     return -1;
@@ -213,7 +221,7 @@ int sendControlPacket(int fd, ControlType type) {
   return 0;
 }
 
-int readControlPacket(int fd, ControlPacket *packet) {
+int read_control_packet(int fd, control_packet *packet) {
   char *buffer;
   int size = llread(fd, &buffer);
   if (size == -1) {
@@ -221,16 +229,16 @@ int readControlPacket(int fd, ControlPacket *packet) {
     AL_PRINT_ERROR("Failed to receive packet, aborting..");
     return -1;
   }
-  parseControlPacket(buffer, size, packet);
+  parse_control_packet(buffer, size, packet);
 #ifdef AL_PRINT_CPACKETS
   printf("al: received control Packet ");
-  printControlPacket(packet);
+  print_control_packet(packet);
 #endif
   free(buffer);
   return 0;
 }
 
-void buildControlPacket(ControlType type, CharBuffer *packet) {
+void build_control_packet(control_type type, CharBuffer *packet) {
   /**
    * [C][T Size][L Size][  V Size  ][T Name][L Name][  V Name  ]
    * C - Control Field  T - Type  L - Length  V - Value
@@ -257,14 +265,14 @@ void buildControlPacket(ControlType type, CharBuffer *packet) {
   }
 }
 
-void printControlPacket(ControlPacket *packet) {
+void print_control_packet(control_packet *packet) {
   if (packet == NULL) return;
 
   printf("[C %d][T 0][L %d][V %d][T 1][V %d][V %s]\n", packet->type,
          packet->sizeLength, packet->size, packet->nameLength, packet->name);
 }
 
-int parseControlPacket(char *packetBuffer, int size, ControlPacket *cp) {
+int parse_control_packet(char *packetBuffer, int size, control_packet *cp) {
   if (packetBuffer == NULL) return -1;
   if (size < CP_MIN_SIZE) return -1;
 
@@ -311,7 +319,7 @@ int parseControlPacket(char *packetBuffer, int size, ControlPacket *cp) {
   return 0;
 }
 
-int getFileInfo(const char *filename, FILE *fptr) {
+int get_file_info(const char *filename, FILE *fptr) {
   if (fptr == NULL) return -1;
 
   // Name
@@ -337,7 +345,7 @@ int getFileInfo(const char *filename, FILE *fptr) {
   return 0;
 }
 
-void printProgress(int done, int total) {
+void print_progress(int done, int total) {
   float percent = ((float)done / (float)total) * 100.0f;
   int blocks = percent / 10;
 

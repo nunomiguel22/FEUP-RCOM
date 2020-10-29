@@ -20,11 +20,11 @@
 
 #define INF_FRAME_SIZE 6
 #define CONTROL_FRAME_SIZE 5
-
-#define DEFAULT_BAUDRATE B38400
 #define MAX_PORT_LENGTH 20
+
 #define MAX_TRANSMISSION_ATTEMPS 3
 #define TIMEOUT_DURATION 3
+#define DEFAULT_BAUDRATE B38400
 
 /*  Port name prefix */
 #ifdef __linux__
@@ -55,6 +55,9 @@ typedef enum {
 struct termios oldtio;
 static link_layer ll;
 static link_type ltype;
+static ll_statistics stats;
+static bool ll_init = false;
+
 volatile bool alarm_triggered;
 volatile unsigned int transmission_attempts = 0;
 
@@ -74,6 +77,7 @@ int send_frame(int fd, CharBuffer *frame);
 int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply);
 int send_control_frame(int fd, ll_control_type type);
 void log_frame(CharBuffer *frame);
+int get_termios_baudrate(int baudrate);
 
 void log_msg(const char *msg) {
 #ifdef LL_LOG_INFORMATION
@@ -126,6 +130,13 @@ bool was_alarm_triggered() {
  * LINK LAYER
  *
  */
+
+void ll_setup(int timeout, int max_retries, int baudrate) {
+  ll.timeout = timeout;
+  ll.num_transmissions = max_retries;
+  ll.baud_rate = get_termios_baudrate(baudrate);
+  ll_init = true;
+}
 
 // LLOPEN
 int llopen(int port, link_type type) {
@@ -275,6 +286,8 @@ int llread(int fd, char **buffer) {
   return LL_ERROR_GENERAL;
 }
 
+ll_statistics ll_get_stats() { return stats; }
+
 /**
  *
  *
@@ -353,6 +366,7 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
         uchar_t replySeq = ((uchar_t)(reply_frame.buffer[C_FIELD]) >> 7);
         if (replySeq != (uchar_t)(ll.sequence_number)) {
           log_msg("frame ignored - duplicate");
+          ++stats.frames_ignored;
           CharBuffer_destroy(&reply_frame);
           continue;
         }
@@ -361,6 +375,7 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
       if (is_rej) {
         CharBuffer_destroy(&reply_frame);
         log_msg("frame Rejected by receiver");
+        ++stats.frames_rejected;
         ++transmission_attempts;
         break;
       }
@@ -369,8 +384,10 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
         CharBuffer_destroy(&reply_frame);
         reset_alarm_handler();
         return 1;
-      } else
+      } else {
         log_msg("frame ignored - unexpected control field");
+        ++stats.frames_ignored;
+      }
     }
   }
 
@@ -421,12 +438,15 @@ int read_frame(int fd, CharBuffer *frame) {
     CharBuffer_push(frame, inc_byte);
   }
 
+  ++stats.frames_total;
+
 #ifdef LL_LOG_BUFFER
   CharBuffer_printHex(frame);
 #endif
 
   if (validate_control_frame(frame) < 0) {
     log_msg("frame ignored - failed validation of header");
+    ++stats.frames_ignored;
     return LL_ERROR_GENERAL;
   }
 
@@ -576,12 +596,59 @@ void log_frame(CharBuffer *frame) {
  *
  */
 
+int get_termios_baudrate(int baudrate) {
+  switch (baudrate) {
+    case 0:
+      return B0;
+    case 50:
+      return B50;
+    case 75:
+      return B75;
+    case 110:
+      return B110;
+    case 134:
+      return B134;
+    case 150:
+      return B150;
+    case 200:
+      return B200;
+    case 300:
+      return B300;
+    case 600:
+      return B600;
+    case 1200:
+      return B1200;
+    case 1800:
+      return B1800;
+    case 2400:
+      return B2400;
+    case 4800:
+      return B4800;
+    case 9600:
+      return B9600;
+    case 19200:
+      return B19200;
+    case 38400:
+      return B38400;
+    case 57600:
+      return B57600;
+    case 115200:
+      return B115200;
+    case 230400:
+      return B230400;
+    case 460800:
+      return B460800;
+    default:
+      return DEFAULT_BAUDRATE;
+  }
+}
+
 int init_serial_port(int port, link_type type) {
   // Init ll struct
   snprintf(ll.port, MAX_PORT_LENGTH, "%s%d", PORT_NAME, port);
-  ll.baud_rate = DEFAULT_BAUDRATE;
-  ll.num_transmissions = MAX_TRANSMISSION_ATTEMPS;
-  ll.timeout = TIMEOUT_DURATION;
+  if (!ll_init)
+    ll_setup(TIMEOUT_DURATION, MAX_TRANSMISSION_ATTEMPS, DEFAULT_BAUDRATE);
+
   ltype = type;
 
   int fd = open(ll.port, O_RDWR | O_NOCTTY | O_NONBLOCK);

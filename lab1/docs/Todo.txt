@@ -10,7 +10,6 @@ APPLICATION LAYER
 
 /* GENERAL */
 
--Add configurable arguments for port, baudrate, timeout, retry attempts, linktype
 -Statistics: bits/s, baudrate, frame loss, ping
 -Report
 -CTRL + C, signal handler

@@ -49,8 +49,13 @@
             "request": "launch",
             "program": "/mnt/f/Projects/Visual Code Projects/FEUP-RCOM/lab1/RCOM",
             "args": [
+                "files/large.jpg",
+                "T",
                 "11",
-                "T"
+                "-timeout=4",
+                "-baudrate=460800",
+                "-max_retries=3",
+                "-frag_size=10000"
             ],
             "stopAtEntry": false,
             "cwd": ".",
