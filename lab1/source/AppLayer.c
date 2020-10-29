@@ -1,5 +1,5 @@
 #include "AppLayer.h"
-#include "LinkLayer.h"
+#include "link_layer.h"
 #include "CharBuffer.h"
 
 #include <stdlib.h>

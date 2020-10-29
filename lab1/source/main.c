@@ -1,4 +1,4 @@
-#include "LinkLayer.h"
+#include "link_layer.h"
 #include "AppLayer.h"
 #include "CharBuffer.h"
 #include <stdio.h>
@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
 
   int port = atoi(argv[1]);
 
-  LinkType type = RECEIVER;
+  link_type type = RECEIVER;
   if (argv[2][0] == 'T') type = TRANSMITTER;
 
   if (type == RECEIVER) {
