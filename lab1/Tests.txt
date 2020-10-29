@@ -1,0 +1,22 @@
+
+LinkLayer:
+llopen: [V]
+    * Transmitter cant write, no connection
+    * Transmitter sends random data [V]
+    * Transmitter sends wrong control field [V] 
+    * Transmitter sends frame with wrong BCC1 [V]
+    * Transmitter sends wrong address field [V]
+    * Receiver does not send UA [X] - Causes desync
+    * Receiver sends delayed UA(2 secs) [V]
+    * Receiver sends delayed UA(5 secs) [V]
+    * Receiver sends delayed UA(15 secs) [X] - Causes desync
+
+llread/write:
+    * Duplicate handling of INF/RR [V] 
+    * Delay in replying RR [V]
+    * No RR reply [V]
+    * Delay in sending INF [V]
+    * Send random data
+    * Send wrong BCC2, BCC2 as FLAG, BCC2 as ESC
+    * Send wrong control flag
+

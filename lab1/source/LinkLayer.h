@@ -1,10 +1,37 @@
 #ifndef LINKLAYER_H
 #define LINKLAYER_H
 
+#include "CharBuffer.h"
+
+#define LL_FLAG 0x7E     // Flag for beggining and ending of frame
+#define LL_ESC 0x7D      // Escape character for byte stuffing
+#define LL_ESC_MOD 0x20  // Stuffing byte
+#define LL_AF1 0x03      // Transmitter commands, Receiver replys
+#define LL_AF2 0x01      // Transmitter replys, Receiver commands
+
+typedef enum {
+  LL_INF = 0x00,
+  LL_SET = 0x03,
+  LL_DISC = 0x0B,
+  LL_UA = 0x07,
+  LL_RR = 0x05,
+  LL_REJ = 0x01
+} ll_control_type;
+
+typedef enum {
+  LL_ERROR_GENERAL = -1,
+  LL_ERROR_OK = 0,
+  LL_ERROR_FRAME_TOO_SMALL = -2,
+  LL_ERROR_BAD_START_FLAG = -3,
+  LL_ERROR_BAD_ADDRESS = -4,
+  LL_ERROR_BAD_BCC1 = -5,
+  LL_ERROR_BAD_END_FLAG = -6
+} ll_error_code;
+
 /**
  * Enum of types of Link Layer connection. RECEIVER(0x01) or TRANSMITTER(0x01).
  */
-typedef enum { TRANSMITTER = 0x00, RECEIVER = 0x01 } LinkType;
+typedef enum { TRANSMITTER = 0x00, RECEIVER = 0x01 } link_type;
 
 /**
  * Establish connection between ports.
@@ -13,7 +40,7 @@ typedef enum { TRANSMITTER = 0x00, RECEIVER = 0x01 } LinkType;
  * @param type This will set the connection type to RECEIVER or TRANSMITTER
  * @return file descriptor of the connection on success, -1 on failure
  */
-int llopen(int port, LinkType type);
+int llopen(int port, link_type type);
 /**
  * Close connection between ports, frees memory and closes file descriptor.
  *
@@ -39,5 +66,11 @@ int llwrite(int fd, char* buffer, int length);
  * @return number of read bytes or -1 on failure
  */
 int llread(int fd, char** buffer);
+
+/** Testing **/
+void build_data_frame(CharBuffer* frame, char* buffer, int length);
+int send_raw_data(int fd, char* buffer, int length);
+int init_serial_port(int port, link_type type);
+void close_serial_port(int fd);
 
 #endif

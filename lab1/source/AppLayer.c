@@ -1,5 +1,6 @@
 #include "AppLayer.h"
 #include "LinkLayer.h"
+#include "CharBuffer.h"
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -23,6 +24,7 @@
 
 #define AL_PRINT_ERROR(msg) fprintf(stderr, "alerror: %s\n", msg)
 
+typedef unsigned char uchar;
 typedef enum {
   CONTROL_START = 0x02,
   CONTROL_END = 0x03,
@@ -92,7 +94,7 @@ int sendFile(const char *filename) {
   packet.size = 1;
   unsigned int bytesTransferred = 0;
   while (true) {
-    packet.size = fread(&packet.data[L1_FIELD + 1], sizeof(unsigned char),
+    packet.size = fread(&packet.data[L1_FIELD + 1], sizeof(uchar),
                         MAX_FRAGMENT_SIZE, fptr);
     if (packet.size <= 0) {
       break;
@@ -120,14 +122,13 @@ int sendFile(const char *filename) {
 }
 
 int receiveFile(const char *filename) {
-  printf("al: waiting for connection\n");
   // Establish LL Connection
   int fd = llopen(10, RECEIVER);
   if (fd == -1) {
     AL_PRINT_ERROR("Failed to establish connection");
     return -1;
   }
-
+  printf("al: waiting for connection\n");
   // Wait for start control packet
 
   FILE *fptr = fopen(filename, "w");
@@ -181,17 +182,17 @@ int readDataPacket(int fd, DataPacket *packet, char *buffer) {
   }
 
   packet->sequenceNr = buffer[SEQ_FIELD];
-  packet->size = (unsigned char)buffer[L2_FIELD] * 256;
-  packet->size += (unsigned char)buffer[L1_FIELD];
+  packet->size = (uchar)buffer[L2_FIELD] * 256;
+  packet->size += (uchar)buffer[L1_FIELD];
   packet->data = &buffer[L1_FIELD + 1];
   return 0;
 }
 
 int sendDataPacket(int fd, DataPacket *packet) {
   packet->data[CP_CFIELD] = CONTROL_DATA;
-  packet->data[SEQ_FIELD] = (unsigned char)packet->sequenceNr;
-  packet->data[L2_FIELD] = (unsigned char)(packet->size / 256);
-  packet->data[L1_FIELD] = (unsigned char)(packet->size % 256);
+  packet->data[SEQ_FIELD] = (uchar)packet->sequenceNr;
+  packet->data[L2_FIELD] = (uchar)(packet->size / 256);
+  packet->data[L1_FIELD] = (uchar)(packet->size % 256);
 
   int res = llwrite(fd, (char *)packet->data, packet->size + DATA_HEADER_SIZE);
 
@@ -283,7 +284,7 @@ int parseControlPacket(char *packetBuffer, int size, ControlPacket *cp) {
       AL_PRINT_ERROR("Invalid Control Packet");
       return -1;
     }
-    cp->size |= ((unsigned char)packetBuffer[index++]) << (8 * i);
+    cp->size |= ((uchar)packetBuffer[index++]) << (8 * i);
   }
 
   if ((index > (size - 1)) || (packetBuffer[index++] != TLV_NAME_T)) {
