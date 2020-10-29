@@ -1,5 +1,5 @@
-#ifndef LINKLAYER_H
-#define LINKLAYER_H
+#ifndef LINK_LAYER_H
+#define LINK_LAYER_H
 
 #include "CharBuffer.h"
 
