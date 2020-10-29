@@ -11,9 +11,9 @@
 #include <stdbool.h>
 #include <signal.h>
 
-#define LL_LOG_INFORMATION  // Log general information
+//#define LL_LOG_INFORMATION  // Log general information
 //#define LL_LOG_BUFFER  // Log entire frame
-#define LL_LOG_FRAMES  // Log frame headers
+//#define LL_LOG_FRAMES  // Log frame headers
 
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
@@ -57,6 +57,7 @@ static link_layer ll;
 static link_type ltype;
 static ll_statistics stats;
 static bool ll_init = false;
+static int afd;
 
 volatile bool alarm_triggered;
 volatile unsigned int transmission_attempts = 0;
@@ -88,7 +89,7 @@ void log_msg(const char *msg) {
 /**
  *
  *
- * ALARM
+ * SIGNALS
  *
  */
 
@@ -124,6 +125,14 @@ bool was_alarm_triggered() {
   return false;
 }
 
+// Reset termios on CTRL+C
+void sig_int_handler(int sig) {
+  if (sig == SIGALRM) {
+    tcsetattr(afd, TCSANOW, &oldtio);
+    exit(-1);
+  }
+}
+
 /**
  *
  *
@@ -140,11 +149,12 @@ void ll_setup(int timeout, int max_retries, int baudrate) {
 
 // LLOPEN
 int llopen(int port, link_type type) {
-  int fd = init_serial_port(port, type);
-  if (fd == -1) return -1;
+  signal(SIGINT, sig_int_handler);
+  afd = init_serial_port(port, type);
+  if (afd == -1) return -1;
 
-  if (type == TRANSMITTER) return ll_open_transmitter(fd);
-  return ll_open_receiver(fd);
+  if (type == TRANSMITTER) return ll_open_transmitter(afd);
+  return ll_open_receiver(afd);
 }
 
 // LLCLOSE
@@ -366,7 +376,7 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
         uchar_t replySeq = ((uchar_t)(reply_frame.buffer[C_FIELD]) >> 7);
         if (replySeq != (uchar_t)(ll.sequence_number)) {
           log_msg("frame ignored - duplicate");
-          ++stats.frames_ignored;
+          ++stats.frames_lost;
           CharBuffer_destroy(&reply_frame);
           continue;
         }
@@ -375,7 +385,7 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
       if (is_rej) {
         CharBuffer_destroy(&reply_frame);
         log_msg("frame Rejected by receiver");
-        ++stats.frames_rejected;
+        ++stats.frames_lost;
         ++transmission_attempts;
         break;
       }
@@ -386,7 +396,7 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
         return 1;
       } else {
         log_msg("frame ignored - unexpected control field");
-        ++stats.frames_ignored;
+        ++stats.frames_lost;
       }
     }
   }
@@ -446,7 +456,7 @@ int read_frame(int fd, CharBuffer *frame) {
 
   if (validate_control_frame(frame) < 0) {
     log_msg("frame ignored - failed validation of header");
-    ++stats.frames_ignored;
+    ++stats.frames_lost;
     return LL_ERROR_GENERAL;
   }
 

@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
 
 //#define AL_PRINT_CPACKETS
 
@@ -23,7 +24,7 @@
 #define TLV_NAME_T 0x01
 #define CP_MIN_SIZE 7
 
-#define AL_PRINT_ERROR(msg) fprintf(stderr, "alerror: %s\n", msg)
+#define AL_LOG_INFORMATION
 
 typedef unsigned char uchar;
 typedef enum {
@@ -48,7 +49,8 @@ typedef struct {
 } data_packet;
 
 control_packet fileCP;  // Control Packet with file information
-static int frag_size = MAX_FRAGMENT_SIZE;
+static al_statistics al_stats;
+static int al_frag_size = MAX_FRAGMENT_SIZE;
 
 void print_control_packet(control_packet *packet);
 int read_control_packet(int fd, control_packet *packet);
@@ -60,16 +62,57 @@ int read_data_packet(int fd, data_packet *packet, char *buffer);
 int send_data_packet(int fd, data_packet *packet);
 void print_progress(int done, int total);
 
+void al_log_msg(const char *msg) {
+#ifdef AL_LOG_INFORMATION
+  fprintf(stderr, "al: %s\n", msg);
+#endif
+}
+
+double clock_seconds_since(clock_t start) {
+  return ((double)(clock() - start) / (double)CLOCKS_PER_SEC);
+}
+
+void update_statistics(clock_t start_timer) {
+  al_stats.file_size = fileCP.size;
+  al_stats.transmission_duration_secs = clock_seconds_since(start_timer);
+  ll_statistics ll_stats = ll_get_stats();
+  al_stats.frames_total = ll_stats.frames_total;
+  al_stats.frames_lost = ll_stats.frames_lost;
+  al_stats.avg_bits_per_second =
+      (double)(al_stats.file_size * 8) / al_stats.transmission_duration_secs;
+}
+
+al_statistics al_get_stats() { return al_stats; }
+
+void al_print_stats() {
+  printf("Statistics:\n");
+  float eff = (float)al_stats.baudrate / (float)al_stats.avg_bits_per_second;
+  printf(" baudrate %d bits/s \taverage bitrate %d bits/s \tEfficiency %.2f \n",
+         al_stats.baudrate, al_stats.avg_bits_per_second, eff);
+  printf(" file size %d bytes \tmax fragment size %d bytes \tpackets sent %d\n",
+         al_stats.file_size, al_frag_size, al_stats.data_packet_count);
+  printf(" transmission time %.2f seconds\n",
+         al_stats.transmission_duration_secs);
+  float floss = (float)al_stats.frames_lost / (float)al_stats.frames_total;
+  printf(" total Frames %d \tlost frames %d \tframe loss %.2f\n",
+         al_stats.frames_total, al_stats.frames_lost, floss);
+}
+
 void al_setup(int timeout, int baudrate, int max_retries, int frag_size) {
+  al_stats.timeout = timeout;
+  al_stats.retries = max_retries;
+  al_stats.data_packet_count = 0;
   if (baudrate > MAX_BAUDRATE) baudrate = MAX_BAUDRATE;
-  if (frag_size > MAX_FRAGMENT_SIZE) frag_size = MAX_FRAGMENT_SIZE;
+  al_stats.baudrate = baudrate;
+  al_frag_size = frag_size;
+  if (al_frag_size > MAX_FRAGMENT_SIZE) al_frag_size = MAX_FRAGMENT_SIZE;
   ll_setup(timeout, max_retries, baudrate);
 }
 
 int al_sendFile(const char *filename, int port) {
   int nameLength = strlen(filename);
   if (nameLength > MAX_FILE_NAME) {
-    AL_PRINT_ERROR("Filename length exceeds limits(256 characters)");
+    al_log_msg("Filename length exceeds limits(256 characters)");
     return -1;
   }
   fileCP.nameLength = nameLength;
@@ -77,19 +120,21 @@ int al_sendFile(const char *filename, int port) {
   // Open File Stream
   FILE *fptr = fopen(filename, "r");
   if (fptr == NULL) {
-    AL_PRINT_ERROR("Could not open selected file");
+    al_log_msg("Could not open selected file");
     return -1;
   }
 
   // Establish LL Connection
   int fd = llopen(port, TRANSMITTER);
   if (fd == -1) {
-    AL_PRINT_ERROR("Failed to establish connection");
+    al_log_msg("Failed to establish connection");
     return -1;
   }
 
   // Get File Information
   get_file_info(filename, fptr);
+
+  clock_t start_timer = clock();
 
   // Send start control packet
   if (send_control_packet(fd, CONTROL_START) == -1) return -1;
@@ -97,16 +142,17 @@ int al_sendFile(const char *filename, int port) {
 
   // Send data packets until the file is read
   data_packet packet;
-  packet.data = (char *)malloc(frag_size + DATA_HEADER_SIZE);
+  packet.data = (char *)malloc(al_frag_size + DATA_HEADER_SIZE);
   packet.sequenceNr = 0;
   packet.size = 1;
   unsigned int bytesTransferred = 0;
   while (true) {
     packet.size =
-        fread(&packet.data[L1_FIELD + 1], sizeof(uchar), frag_size, fptr);
+        fread(&packet.data[L1_FIELD + 1], sizeof(uchar), al_frag_size, fptr);
     if (packet.size <= 0) {
       break;
     }
+    ++al_stats.data_packet_count;
     ++packet.sequenceNr;
     packet.sequenceNr %= 256;
     send_data_packet(fd, &packet);
@@ -122,6 +168,8 @@ int al_sendFile(const char *filename, int port) {
   if (send_control_packet(fd, CONTROL_END) == -1) return -1;
   printf("al: file transmission is over\n");
 
+  update_statistics(start_timer);
+
   // Close connection and cleanup
   llclose(fd);
   free(fileCP.name);
@@ -130,20 +178,21 @@ int al_sendFile(const char *filename, int port) {
 }
 
 int al_receiveFile(const char *filename, int port) {
+  printf("al: waiting for connection\n");
+
   // Establish LL Connection
   int fd = llopen(port, RECEIVER);
   if (fd == -1) {
-    AL_PRINT_ERROR("Failed to establish connection");
+    al_log_msg("Failed to establish connection");
     return -1;
   }
-  printf("al: waiting for connection\n");
-  // Wait for start control packet
 
   FILE *fptr = fopen(filename, "w");
   if (fptr == NULL) {
-    AL_PRINT_ERROR("Could not write selected file");
+    al_log_msg("Could not write selected file");
     return -1;
   }
+  clock_t start_timer = clock();
 
   fileCP.type = CONTROL_DATA;
   while (fileCP.type != CONTROL_START) {
@@ -170,6 +219,7 @@ int al_receiveFile(const char *filename, int port) {
   while (packet.type != CONTROL_END) {
     read_control_packet(fd, &packet);
   }
+  update_statistics(start_timer);
   printf("al: file transmission is over\n");
   // Close connection and cleanup
   free(fileCP.name);
@@ -180,12 +230,12 @@ int al_receiveFile(const char *filename, int port) {
 int read_data_packet(int fd, data_packet *packet, char *buffer) {
   int res = llread(fd, &buffer);
   if (res < 0) {
-    AL_PRINT_ERROR("failed to read packet");
+    al_log_msg("failed to read packet");
     return -1;
   }
 
   if (packet == NULL || buffer[CP_CFIELD] != CONTROL_DATA) {
-    AL_PRINT_ERROR("unexpected control packet, aborting...");
+    al_log_msg("unexpected control packet, aborting...");
     return -1;
   }
 
@@ -214,7 +264,7 @@ int send_control_packet(int fd, control_type type) {
   printf("al: sent control Packet ");
   print_control_packet(&fileCP);
   if (llwrite(fd, buffer.buffer, buffer.size) == -1) {
-    AL_PRINT_ERROR("Failed to send packet, aborting..");
+    al_log_msg("Failed to send packet, aborting..");
     return -1;
   }
   CharBuffer_destroy(&buffer);
@@ -226,7 +276,7 @@ int read_control_packet(int fd, control_packet *packet) {
   int size = llread(fd, &buffer);
   if (size == -1) {
     free(buffer);
-    AL_PRINT_ERROR("Failed to receive packet, aborting..");
+    al_log_msg("Failed to receive packet, aborting..");
     return -1;
   }
   parse_control_packet(buffer, size, packet);
@@ -280,7 +330,7 @@ int parse_control_packet(char *packetBuffer, int size, control_packet *cp) {
   cp->type = packetBuffer[index++];
 
   if (packetBuffer[index++] != TLV_SIZE_T) {
-    AL_PRINT_ERROR("Invalid control packet");
+    al_log_msg("Invalid control packet");
     return -1;
   }
 
@@ -289,19 +339,19 @@ int parse_control_packet(char *packetBuffer, int size, control_packet *cp) {
   cp->size = 0;
   for (int8_t i = 0; i < cp->sizeLength; ++i) {
     if (index > size - 1) {
-      AL_PRINT_ERROR("Invalid Control Packet");
+      al_log_msg("Invalid Control Packet");
       return -1;
     }
     cp->size |= ((uchar)packetBuffer[index++]) << (8 * i);
   }
 
   if ((index > (size - 1)) || (packetBuffer[index++] != TLV_NAME_T)) {
-    AL_PRINT_ERROR("Invalid control packet");
+    al_log_msg("Invalid control packet");
     return -1;
   }
 
   if (index > (size - 1)) {
-    AL_PRINT_ERROR("Invalid control packet");
+    al_log_msg("Invalid control packet");
     return -1;
   }
   cp->nameLength = (int8_t)packetBuffer[index++];
@@ -310,7 +360,7 @@ int parse_control_packet(char *packetBuffer, int size, control_packet *cp) {
 
   for (int i = 0; index < (namePos + cp->nameLength); ++index) {
     if (index > size) {
-      AL_PRINT_ERROR("Invalid control packet");
+      al_log_msg("Invalid control packet");
       return -1;
     }
     cp->name[i++] = packetBuffer[index];

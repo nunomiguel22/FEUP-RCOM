@@ -30,8 +30,7 @@ typedef enum {
 
 typedef struct {
   unsigned int frames_total;
-  unsigned int frames_rejected;
-  unsigned int frames_ignored;
+  unsigned int frames_lost;
 } ll_statistics;
 
 /**

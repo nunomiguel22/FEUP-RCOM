@@ -53,7 +53,6 @@ int main(int argc, char** argv) {
 
     if (!strncmp(argv[i], "-max_retries=", 13) && strlen(argv[i]) > 13) {
       retries = atoi(&argv[i][13]);
-      printf("%s\n", &argv[i][13]);
       continue;
     }
 
@@ -75,6 +74,8 @@ int main(int argc, char** argv) {
   } else {
     al_sendFile(file_name, port);
   }
+
+  al_print_stats();
 
   return 0;
 }
