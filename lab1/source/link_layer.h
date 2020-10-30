@@ -1,7 +1,7 @@
 #ifndef LINK_LAYER_H
 #define LINK_LAYER_H
 
-#include "CharBuffer.h"
+#include "char_buffer.h"
 
 #define LL_FLAG 0x7E     // Flag for beggining and ending of frame
 #define LL_ESC 0x7D      // Escape character for byte stuffing
@@ -91,11 +91,11 @@ ll_statistics ll_get_stats();
 /**
  * Builds a data frame given a buffer
  *
- * @param frame CharBuffer where frame will be stored
+ * @param frame char_buffer where frame will be stored
  * @param buffer Buffer with data to frame
  * @param length Data buffer length
  */
-void build_data_frame(CharBuffer* frame, char* buffer, int length);
+void build_data_frame(char_buffer* frame, char* buffer, int length);
 /**
  * Sends a buffer of raw data through the port
  *

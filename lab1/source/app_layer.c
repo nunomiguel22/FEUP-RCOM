@@ -1,6 +1,6 @@
 #include "app_layer.h"
 #include "link_layer.h"
-#include "CharBuffer.h"
+#include "char_buffer.h"
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -56,7 +56,7 @@ void print_control_packet(control_packet *packet);
 int read_control_packet(int fd, control_packet *packet);
 int parse_control_packet(char *packetBuffer, int size, control_packet *cp);
 int send_control_packet(int fd, control_type type);
-void build_control_packet(control_type type, CharBuffer *packet);
+void build_control_packet(control_type type, char_buffer *packet);
 int get_file_info(const char *filename, FILE *fptr);
 int read_data_packet(int fd, data_packet *packet, char *buffer);
 int send_data_packet(int fd, data_packet *packet);
@@ -180,6 +180,8 @@ int al_sendFile(const char *filename, int port) {
 int al_receiveFile(const char *filename, int port) {
   printf("al: waiting for connection\n");
 
+  static int8_t seq_number = 1;
+
   // Establish LL Connection
   int fd = llopen(port, RECEIVER);
   if (fd == -1) {
@@ -205,6 +207,14 @@ int al_receiveFile(const char *filename, int port) {
   while (bytesTransferred < fileCP.size) {
     char *buffer = NULL;
     if (read_data_packet(fd, &data_packet, buffer) == -1) return -1;
+
+    if (data_packet.sequenceNr != seq_number) {
+      al_log_msg("ignoring duplicate data packet");
+      free(buffer);
+      continue;
+    }
+    ++seq_number;
+    seq_number %= 256;
 
     fwrite(data_packet.data, sizeof(char), data_packet.size, fptr);
 
@@ -259,7 +269,7 @@ int send_data_packet(int fd, data_packet *packet) {
 }
 
 int send_control_packet(int fd, control_type type) {
-  CharBuffer buffer;
+  char_buffer buffer;
   build_control_packet(type, &buffer);
   printf("al: sent control Packet ");
   print_control_packet(&fileCP);
@@ -267,7 +277,7 @@ int send_control_packet(int fd, control_type type) {
     al_log_msg("Failed to send packet, aborting..");
     return -1;
   }
-  CharBuffer_destroy(&buffer);
+  char_buffer_destroy(&buffer);
   return 0;
 }
 
@@ -288,7 +298,7 @@ int read_control_packet(int fd, control_packet *packet) {
   return 0;
 }
 
-void build_control_packet(control_type type, CharBuffer *packet) {
+void build_control_packet(control_type type, char_buffer *packet) {
   /**
    * [C][T Size][L Size][  V Size  ][T Name][L Name][  V Name  ]
    * C - Control Field  T - Type  L - Length  V - Value
@@ -297,21 +307,21 @@ void build_control_packet(control_type type, CharBuffer *packet) {
    */
   fileCP.type = type;
   int packetSize = 5 + fileCP.sizeLength + fileCP.nameLength;
-  CharBuffer_init(packet, packetSize);
-  CharBuffer_push(packet, (char)type);
+  char_buffer_init(packet, packetSize);
+  char_buffer_push(packet, (char)type);
   // SIZE TLV
-  CharBuffer_push(packet, (char)TLV_SIZE_T);
-  CharBuffer_push(packet, (char)fileCP.sizeLength);
+  char_buffer_push(packet, (char)TLV_SIZE_T);
+  char_buffer_push(packet, (char)fileCP.sizeLength);
   unsigned int size = fileCP.size;
   for (uint8_t i = 0; i < fileCP.sizeLength; ++i) {
-    CharBuffer_push(packet, (char)size & 0x000000FF);
+    char_buffer_push(packet, (char)size & 0x000000FF);
     size >>= 8;
   }
   // NAME TLV
-  CharBuffer_push(packet, (char)TLV_NAME_T);
-  CharBuffer_push(packet, (char)fileCP.nameLength);
+  char_buffer_push(packet, (char)TLV_NAME_T);
+  char_buffer_push(packet, (char)fileCP.nameLength);
   for (int i = 0; i < fileCP.nameLength; ++i) {
-    CharBuffer_push(packet, fileCP.name[i]);
+    char_buffer_push(packet, fileCP.name[i]);
   }
 }
 

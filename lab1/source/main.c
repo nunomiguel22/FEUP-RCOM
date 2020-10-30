@@ -1,6 +1,6 @@
 #include "link_layer.h"
 #include "app_layer.h"
-#include "CharBuffer.h"
+#include "char_buffer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -69,18 +69,14 @@ int main(int argc, char** argv) {
 
   al_setup(timeout, baudrate, retries, frag_size);
 
+  int res;
   if (type == RECEIVER) {
-    al_receiveFile(file_name, port);
+    res = al_receiveFile(file_name, port);
   } else {
-    al_sendFile(file_name, port);
+    res = al_sendFile(file_name, port);
   }
 
-  al_print_stats();
+  if (res >= 0) al_print_stats();
 
   return 0;
 }
-
-/** *
- * Tests
- *
- */

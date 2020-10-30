@@ -66,18 +66,18 @@ volatile unsigned int transmission_attempts = 0;
 // Link Layer
 int ll_open_transmitter(int fd);
 int ll_open_receiver(int fd);
-int read_frame(int fd, CharBuffer *frame);
-int validate_control_frame(CharBuffer *frame);
-void build_control_frame(CharBuffer *frame, ll_control_type type);
-void build_data_frame(CharBuffer *frame, char *buffer, int length);
+int read_frame(int fd, char_buffer *frame);
+int validate_control_frame(char_buffer *frame);
+void build_control_frame(char_buffer *frame, ll_control_type type);
+void build_data_frame(char_buffer *frame, char *buffer, int length);
 char get_address_field(link_type lnk, ll_control_type type);
 bool is_control_command(ll_control_type type);
-bool is_frame_control_type(CharBuffer *frame, ll_control_type type);
+bool is_frame_control_type(char_buffer *frame, ll_control_type type);
 void printControlType(ll_control_type type);
-int send_frame(int fd, CharBuffer *frame);
-int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply);
+int send_frame(int fd, char_buffer *frame);
+int frame_exchange(int fd, char_buffer *frame, ll_control_type reply);
 int send_control_frame(int fd, ll_control_type type);
-void log_frame(CharBuffer *frame);
+void log_frame(char_buffer *frame);
 int get_termios_baudrate(int baudrate);
 
 void log_msg(const char *msg) {
@@ -127,7 +127,7 @@ bool was_alarm_triggered() {
 
 // Reset termios on CTRL+C
 void sig_int_handler(int sig) {
-  if (sig == SIGALRM) {
+  if (sig == SIGINT) {
     tcsetattr(afd, TCSANOW, &oldtio);
     exit(-1);
   }
@@ -163,16 +163,16 @@ int llclose(int fd) {
 
   if (ltype == TRANSMITTER) {
     // Send Disc, receive DISC
-    CharBuffer discFrame;
+    char_buffer discFrame;
     build_control_frame(&discFrame, LL_DISC);
     if (frame_exchange(fd, &discFrame, LL_DISC) == -1) {
       log_msg("warning - failed to communicate disconnect");
-      CharBuffer_destroy(&discFrame);
+      char_buffer_destroy(&discFrame);
       close_serial_port(fd);
       return LL_ERROR_GENERAL;
     }
 
-    CharBuffer_destroy(&discFrame);
+    char_buffer_destroy(&discFrame);
 
     // Send UA
     send_control_frame(fd, LL_UA);
@@ -184,10 +184,10 @@ int llclose(int fd) {
   if (ltype == RECEIVER) {
     while (true) {
       /* Wait for DISC */
-      CharBuffer reply_frame;
+      char_buffer reply_frame;
       int res = read_frame(fd, &reply_frame);
       bool is_disc = is_frame_control_type(&reply_frame, LL_DISC);
-      CharBuffer_destroy(&reply_frame);
+      char_buffer_destroy(&reply_frame);
 
       if (!is_disc) log_msg("frame ignored - unexpected control field");
 
@@ -195,7 +195,7 @@ int llclose(int fd) {
       if (res != -1 && is_disc) break;
     }
     /* Send DISC, receive UA */
-    CharBuffer disc_frame;
+    char_buffer disc_frame;
     build_control_frame(&disc_frame, LL_DISC);
     int res = frame_exchange(fd, &disc_frame, LL_UA);
     if (res == -1) log_msg("llclose - failed to communicate disconnect");
@@ -210,34 +210,34 @@ int llclose(int fd) {
 
 // LLWRITE
 int llwrite(int fd, char *buffer, int length) {
-  CharBuffer frame;
+  char_buffer frame;
   build_data_frame(&frame, buffer, length);
   if (frame_exchange(fd, &frame, LL_RR) == -1) {
     log_msg("llwrite failed");
 
-    CharBuffer_destroy(&frame);
+    char_buffer_destroy(&frame);
     return -1;
   }
 
   int size = frame.size;
   ll.sequence_number ^= 1;
-  CharBuffer_destroy(&frame);
+  char_buffer_destroy(&frame);
   return size;
 }
 
 // LLREAD
 int llread(int fd, char **buffer) {
-  CharBuffer frame;
+  char_buffer frame;
   while (true) {
     if (read_frame(fd, &frame) == -1) {
-      CharBuffer_destroy(&frame);
+      char_buffer_destroy(&frame);
       continue;
     }
 
     // Ignore
     if (!is_frame_control_type(&frame, LL_INF)) {
       log_msg("frame ignored - unexpected control field");
-      CharBuffer_destroy(&frame);
+      char_buffer_destroy(&frame);
       continue;
     }
 
@@ -248,8 +248,8 @@ int llread(int fd, char **buffer) {
       continue;
     }
 
-    CharBuffer packet;
-    CharBuffer_init(&packet, INF_FRAME_SIZE);
+    char_buffer packet;
+    char_buffer_init(&packet, INF_FRAME_SIZE);
 
     uchar_t bcc2 = 0x00;  // Calculated BCC2
     // Get the packet BBC2 value, check for ESC_MOD
@@ -274,22 +274,22 @@ int llread(int fd, char **buffer) {
         temp = (uchar_t)frame.buffer[i];
 
       bcc2 ^= temp;
-      CharBuffer_push(&packet, temp);
+      char_buffer_push(&packet, temp);
     }
 
     // BCC2 check
     if (bcc2 != packet_bcc2) {
       log_msg("frame rejected - failed BBC2 check");
       send_control_frame(fd, LL_REJ);
-      CharBuffer_destroy(&packet);
-      CharBuffer_destroy(&frame);
+      char_buffer_destroy(&packet);
+      char_buffer_destroy(&frame);
       continue;
     }
 
     // Frame read successfuly, flip seq number and reply with RR
     ll.sequence_number ^= 1;
     send_control_frame(fd, LL_RR);
-    CharBuffer_destroy(&frame);
+    char_buffer_destroy(&frame);
     *buffer = packet.buffer;
     return packet.size;
   }
@@ -308,13 +308,13 @@ ll_statistics ll_get_stats() { return stats; }
 int ll_open_transmitter(int fd) {
   ll.sequence_number = 1;
 
-  CharBuffer set_frame;
+  char_buffer set_frame;
   build_control_frame(&set_frame, LL_SET);
   if (frame_exchange(fd, &set_frame, LL_UA) == -1) {
-    CharBuffer_destroy(&set_frame);
+    char_buffer_destroy(&set_frame);
     return LL_ERROR_GENERAL;
   }
-  CharBuffer_destroy(&set_frame);
+  char_buffer_destroy(&set_frame);
 
   log_msg("llopen - Connected.\n");
   return fd;
@@ -327,14 +327,14 @@ int ll_open_receiver(int fd) {
 
     ll_control_type type = LL_DISC;
     while (type != LL_SET) {
-      CharBuffer set_frame;
+      char_buffer set_frame;
       if (read_frame(fd, &set_frame) == -1) continue;
 
       type = set_frame.buffer[C_FIELD];
 
       if (type != LL_SET) log_msg("frame ignored - unexpected control field");
 
-      CharBuffer_destroy(&set_frame);
+      char_buffer_destroy(&set_frame);
     }
     if (send_control_frame(fd, LL_UA) == -1) {
       log_msg("llopen - was unable to send UA packet");
@@ -353,18 +353,18 @@ int ll_open_receiver(int fd) {
  *
  */
 
-int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
+int frame_exchange(int fd, char_buffer *frame, ll_control_type reply) {
   set_alarm_handler();
   while (transmission_attempts < ll.num_transmissions) {
     send_frame(fd, frame);
     set_alarm(ll.timeout);
 
     while (true) {
-      CharBuffer reply_frame;
+      char_buffer reply_frame;
       int res = read_frame(fd, &reply_frame);
       // Timeout or invalid frame received
       if (res == -1) {
-        CharBuffer_destroy(&reply_frame);
+        char_buffer_destroy(&reply_frame);
         break;
       }
 
@@ -377,13 +377,13 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
         if (replySeq != (uchar_t)(ll.sequence_number)) {
           log_msg("frame ignored - duplicate");
           ++stats.frames_lost;
-          CharBuffer_destroy(&reply_frame);
+          char_buffer_destroy(&reply_frame);
           continue;
         }
       }
       // Received REJ, resend frame
       if (is_rej) {
-        CharBuffer_destroy(&reply_frame);
+        char_buffer_destroy(&reply_frame);
         log_msg("frame Rejected by receiver");
         ++stats.frames_lost;
         ++transmission_attempts;
@@ -391,7 +391,7 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
       }
       // Exchange was sucessful
       if (is_frame_control_type(&reply_frame, reply)) {
-        CharBuffer_destroy(&reply_frame);
+        char_buffer_destroy(&reply_frame);
         reset_alarm_handler();
         return 1;
       } else {
@@ -408,14 +408,14 @@ int frame_exchange(int fd, CharBuffer *frame, ll_control_type reply) {
 }
 
 int send_control_frame(int fd, ll_control_type type) {
-  CharBuffer frame;
+  char_buffer frame;
   build_control_frame(&frame, type);
   int res = send_frame(fd, &frame);
-  CharBuffer_destroy(&frame);
+  char_buffer_destroy(&frame);
   return res;
 }
 
-int send_frame(int fd, CharBuffer *frame) {
+int send_frame(int fd, char_buffer *frame) {
   if (write(fd, frame->buffer, frame->size) < 0) {
     log_msg("warning - unable to write frame to port");
     return LL_ERROR_GENERAL;
@@ -424,9 +424,9 @@ int send_frame(int fd, CharBuffer *frame) {
   return 0;
 }
 
-int read_frame(int fd, CharBuffer *frame) {
+int read_frame(int fd, char_buffer *frame) {
   if (frame == NULL) return LL_ERROR_GENERAL;
-  CharBuffer_init(frame, CONTROL_FRAME_SIZE);
+  char_buffer_init(frame, CONTROL_FRAME_SIZE);
 
   char inc_byte = 0x00;
   int read_status = 0;
@@ -435,7 +435,7 @@ int read_frame(int fd, CharBuffer *frame) {
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
     read_status = read(fd, &inc_byte, 1);
   }
-  CharBuffer_push(frame, inc_byte);
+  char_buffer_push(frame, inc_byte);
   // Reset vars
   read_status = 0;
   inc_byte = 0x00;
@@ -445,13 +445,13 @@ int read_frame(int fd, CharBuffer *frame) {
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
     if (read_status <= 0) continue;
 
-    CharBuffer_push(frame, inc_byte);
+    char_buffer_push(frame, inc_byte);
   }
 
   ++stats.frames_total;
 
 #ifdef LL_LOG_BUFFER
-  CharBuffer_printHex(frame);
+  char_buffer_printHex(frame);
 #endif
 
   if (validate_control_frame(frame) < 0) {
@@ -463,11 +463,11 @@ int read_frame(int fd, CharBuffer *frame) {
   return LL_ERROR_OK;
 }
 
-int validate_control_frame(CharBuffer *frame) {
+int validate_control_frame(char_buffer *frame) {
   if (frame == NULL || frame->buffer == NULL) return -1;
 
   if (frame->size < CONTROL_FRAME_SIZE) {
-    CharBuffer_printHex(frame);
+    char_buffer_printHex(frame);
     return LL_ERROR_FRAME_TOO_SMALL;
   }
 
@@ -490,25 +490,25 @@ int validate_control_frame(CharBuffer *frame) {
   return LL_ERROR_OK;
 }
 
-void build_control_frame(CharBuffer *frame, ll_control_type type) {
-  CharBuffer_init(frame, CONTROL_FRAME_SIZE);
-  CharBuffer_push(frame, LL_FLAG);                         // FLAG
-  CharBuffer_push(frame, get_address_field(ltype, type));  // ADDRESS
+void build_control_frame(char_buffer *frame, ll_control_type type) {
+  char_buffer_init(frame, CONTROL_FRAME_SIZE);
+  char_buffer_push(frame, LL_FLAG);                         // FLAG
+  char_buffer_push(frame, get_address_field(ltype, type));  // ADDRESS
 
   if (type == LL_RR || type == LL_REJ) type |= ll.sequence_number << 7;  // N(r)
 
-  CharBuffer_push(frame, type);                                 // Control type
-  CharBuffer_push(frame, frame->buffer[1] ^ frame->buffer[2]);  // BCC1
-  CharBuffer_push(frame, LL_FLAG);                              // FLAG
+  char_buffer_push(frame, type);                                 // Control type
+  char_buffer_push(frame, frame->buffer[1] ^ frame->buffer[2]);  // BCC1
+  char_buffer_push(frame, LL_FLAG);                              // FLAG
 }
 
-void build_data_frame(CharBuffer *frame, char *buffer, int length) {
-  CharBuffer_init(frame, length + INF_FRAME_SIZE);
-  CharBuffer_push(frame, LL_FLAG);                           // FLAG
-  CharBuffer_push(frame, get_address_field(ltype, LL_INF));  // ADDRESS
-  CharBuffer_push(frame,
-                  LL_INF | (ll.sequence_number << 6));  // Control and N(s)
-  CharBuffer_push(frame, frame->buffer[1] ^ frame->buffer[2]);  // BCC1
+void build_data_frame(char_buffer *frame, char *buffer, int length) {
+  char_buffer_init(frame, length + INF_FRAME_SIZE);
+  char_buffer_push(frame, LL_FLAG);                           // FLAG
+  char_buffer_push(frame, get_address_field(ltype, LL_INF));  // ADDRESS
+  char_buffer_push(frame,
+                   LL_INF | (ll.sequence_number << 6));  // Control and N(s)
+  char_buffer_push(frame, frame->buffer[1] ^ frame->buffer[2]);  // BCC1
 
   // Add buffer to frame and calculate bcc2
   uchar_t bcc2 = 0x00;
@@ -517,20 +517,20 @@ void build_data_frame(CharBuffer *frame, char *buffer, int length) {
     bcc2 ^= (uchar_t)buffer[i];
     // Byte stuffing
     if (buffer[i] == LL_FLAG || buffer[i] == LL_ESC) {
-      CharBuffer_push(frame, LL_ESC);
-      CharBuffer_push(frame, buffer[i] ^ LL_ESC_MOD);
+      char_buffer_push(frame, LL_ESC);
+      char_buffer_push(frame, buffer[i] ^ LL_ESC_MOD);
     } else
-      CharBuffer_push(frame, buffer[i]);
+      char_buffer_push(frame, buffer[i]);
   }
 
   // Bytestuffin on BBC2 when needed
   if (bcc2 == LL_ESC || bcc2 == LL_FLAG) {
-    CharBuffer_push(frame, LL_ESC);
-    CharBuffer_push(frame, bcc2 ^ LL_ESC_MOD);
+    char_buffer_push(frame, LL_ESC);
+    char_buffer_push(frame, bcc2 ^ LL_ESC_MOD);
   } else
-    CharBuffer_push(frame, bcc2);
+    char_buffer_push(frame, bcc2);
 
-  CharBuffer_push(frame, LL_FLAG);
+  char_buffer_push(frame, LL_FLAG);
 }
 
 char get_address_field(link_type lnk, ll_control_type type) {
@@ -548,7 +548,7 @@ bool is_control_command(ll_control_type type) {
   return false;
 }
 
-bool is_frame_control_type(CharBuffer *frame, ll_control_type type) {
+bool is_frame_control_type(char_buffer *frame, ll_control_type type) {
   if (frame == NULL || frame->buffer == NULL) return false;
   type &= 0x0F;
   ll_control_type frameType = frame->buffer[C_FIELD] & 0x0F;
@@ -581,7 +581,7 @@ const char *get_control_type_str(ll_control_type type) {
   }
 }
 
-void log_frame(CharBuffer *frame) {
+void log_frame(char_buffer *frame) {
 #ifdef LL_LOG_FRAMES
   printf("ll: Sent packet %s", get_control_type_str(frame->buffer[C_FIELD]));
 

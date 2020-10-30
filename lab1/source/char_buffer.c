@@ -1,10 +1,10 @@
-#include "CharBuffer.h"
+#include "char_buffer.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-int CharBuffer_init(CharBuffer *cb, int initSize) {
+int char_buffer_init(char_buffer *cb, int initSize) {
   if (cb == NULL) return -1;
 
   cb->buffer = (char *)malloc(initSize * sizeof(char));
@@ -14,7 +14,7 @@ int CharBuffer_init(CharBuffer *cb, int initSize) {
   return 0;
 }
 
-int CharBuffer_push(CharBuffer *cb, char bt) {
+int char_buffer_push(char_buffer *cb, char bt) {
   if (cb == NULL || cb->buffer == NULL) return -1;
 
   // Grow if at capacity
@@ -30,7 +30,7 @@ int CharBuffer_push(CharBuffer *cb, char bt) {
   return 0;
 }
 
-int CharBuffer_remove(CharBuffer *cb, unsigned int pos) {
+int char_buffer_remove(char_buffer *cb, unsigned int pos) {
   if (cb == NULL || cb->buffer == NULL || pos > cb->size + 1) return -1;
 
   // Pop last element
@@ -48,7 +48,7 @@ int CharBuffer_remove(CharBuffer *cb, unsigned int pos) {
   return 0;
 }
 
-void CharBuffer_print(CharBuffer *cb) {
+void char_buffer_print(char_buffer *cb) {
   if (cb == NULL || cb->buffer == NULL) return;
   printf("Buffer Content: ");
   for (unsigned int i = 0; i < cb->size; ++i) printf("%c ", cb->buffer[i]);
@@ -56,7 +56,7 @@ void CharBuffer_print(CharBuffer *cb) {
   printf("\n\n");
 }
 
-void CharBuffer_printHex(CharBuffer *cb) {
+void char_buffer_printHex(char_buffer *cb) {
   if (cb == NULL || cb->buffer == NULL) return;
   printf("Buffer Content: ");
   for (unsigned int i = 0; i < cb->size; ++i) printf("%x ", cb->buffer[i]);
@@ -64,7 +64,7 @@ void CharBuffer_printHex(CharBuffer *cb) {
   printf("\n\n");
 }
 
-void CharBuffer_destroy(CharBuffer *cb) {
+void char_buffer_destroy(char_buffer *cb) {
   if (cb == NULL || cb->buffer == NULL) return;
   free(cb->buffer);
 }
