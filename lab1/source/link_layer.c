@@ -11,9 +11,9 @@
 #include <stdbool.h>
 #include <signal.h>
 
-//#define LL_LOG_INFORMATION  // Log general information
+#define LL_LOG_INFORMATION  // Log general information
 //#define LL_LOG_BUFFER  // Log entire frame
-//#define LL_LOG_FRAMES  // Log frame headers
+#define LL_LOG_FRAMES  // Log frame headers
 
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
@@ -77,7 +77,7 @@ void printControlType(ll_control_type type);
 int send_frame(int fd, char_buffer *frame);
 int frame_exchange(int fd, char_buffer *frame, ll_control_type reply);
 int send_control_frame(int fd, ll_control_type type);
-void log_frame(char_buffer *frame);
+void log_frame(char_buffer *frame, const char *type);
 int get_termios_baudrate(int baudrate);
 
 void log_msg(const char *msg) {
@@ -420,7 +420,7 @@ int send_frame(int fd, char_buffer *frame) {
     log_msg("warning - unable to write frame to port");
     return LL_ERROR_GENERAL;
   }
-  log_frame(frame);
+  log_frame(frame, "sent");
   return 0;
 }
 
@@ -472,7 +472,7 @@ int validate_control_frame(char_buffer *frame) {
   }
 
 #ifdef LL_LOG_FRAMES
-  log_frame(frame);
+  log_frame(frame, "received");
 #endif
 
   // Start Flag
@@ -581,9 +581,10 @@ const char *get_control_type_str(ll_control_type type) {
   }
 }
 
-void log_frame(char_buffer *frame) {
+void log_frame(char_buffer *frame, const char *type) {
 #ifdef LL_LOG_FRAMES
-  printf("ll: Sent packet %s", get_control_type_str(frame->buffer[C_FIELD]));
+  printf("ll: %s packet %s", type,
+         get_control_type_str(frame->buffer[C_FIELD]));
 
   // Header
   printf("\t\t\t[F %x][A %x][C %x][BCC1 %x]", frame->buffer[FD_FIELD],
