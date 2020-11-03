@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     res = al_sendFile(file_name, port);
   }
 
-  if (res >= 0) al_print_stats();
+  // if (res >= 0) al_print_stats();
 
   return 0;
 }
