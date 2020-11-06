@@ -242,7 +242,7 @@ int llread(int fd, char **buffer) {
     }
 
     // Check seq number for duplicate frames
-    if ((frame.buffer[C_FIELD] >> 6) == (char)ll.sequence_number) {
+    if ((frame.buffer[C_FIELD] >> 6) == (uchar_t)ll.sequence_number) {
       log_msg("frame ignored - duplicate");
       send_control_frame(fd, LL_RR);
       continue;
@@ -290,7 +290,7 @@ int llread(int fd, char **buffer) {
     ll.sequence_number ^= 1;
     send_control_frame(fd, LL_RR);
     char_buffer_destroy(&frame);
-    *buffer = packet.buffer;
+    *buffer = (char *)packet.buffer;
     return packet.size;
   }
   return LL_ERROR_GENERAL;
@@ -481,10 +481,11 @@ int validate_control_frame(char_buffer *frame) {
   char expectedAF = get_address_field(ltype ^ 1, frame->buffer[C_FIELD]);
   if (frame->buffer[AF_FIELD] != expectedAF) return LL_ERROR_BAD_ADDRESS;
   // Check BCC1
-  if (frame->buffer[BCC1_FIELD] != (char)(expectedAF ^ frame->buffer[C_FIELD]))
+  if (frame->buffer[BCC1_FIELD] !=
+      (uchar_t)(expectedAF ^ frame->buffer[C_FIELD]))
     return LL_ERROR_BAD_BCC1;
   // Last element flag
-  if (frame->buffer[frame->size - 1] != (char)LL_FLAG)
+  if (frame->buffer[frame->size - 1] != (uchar_t)LL_FLAG)
     return LL_ERROR_BAD_END_FLAG;
 
   return LL_ERROR_OK;

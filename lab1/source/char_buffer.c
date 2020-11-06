@@ -7,10 +7,10 @@
 int char_buffer_init(char_buffer *cb, int initSize) {
   if (cb == NULL) return -1;
 
-  cb->buffer = (char *)malloc(initSize * sizeof(char));
+  cb->buffer = (unsigned char *)malloc(initSize * sizeof(unsigned char));
   if (cb->buffer == NULL) return -1;
   cb->size = 0;
-  cb->capacity = initSize * sizeof(char);
+  cb->capacity = initSize * sizeof(unsigned char);
   return 0;
 }
 
@@ -18,8 +18,8 @@ int char_buffer_push(char_buffer *cb, char bt) {
   if (cb == NULL || cb->buffer == NULL) return -1;
 
   // Grow if at capacity
-  if (cb->size * sizeof(char) >= cb->capacity) {
-    cb->buffer = (char *)realloc(cb->buffer, cb->capacity * 2);
+  if (cb->size * sizeof(unsigned char) >= cb->capacity) {
+    cb->buffer = (unsigned char *)realloc(cb->buffer, cb->capacity * 2);
     if (cb->buffer == NULL) return -1;
     cb->capacity *= 2;
   }
@@ -35,14 +35,14 @@ int char_buffer_remove(char_buffer *cb, unsigned int pos) {
 
   // Pop last element
   if (pos == cb->size + 1) {
-    cb->buffer[pos] = (char)0x00;
+    cb->buffer[pos] = (unsigned char)0x00;
     --cb->size;
     return 0;
   }
 
-  memmove(cb->buffer + pos * sizeof(char),
-          cb->buffer + (pos + 1) * sizeof(char),
-          cb->capacity - (pos + 1) * sizeof(char));
+  memmove(cb->buffer + pos * sizeof(unsigned char),
+          cb->buffer + (pos + 1) * sizeof(unsigned char),
+          cb->capacity - (pos + 1) * sizeof(unsigned char));
 
   --cb->size;
   return 0;

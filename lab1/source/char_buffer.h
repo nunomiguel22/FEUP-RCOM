@@ -2,7 +2,7 @@
 #define CHAR_BUFFER_H
 
 typedef struct {
-  char *buffer;
+  unsigned char *buffer;
   unsigned int size;
   unsigned int capacity;
 } char_buffer;

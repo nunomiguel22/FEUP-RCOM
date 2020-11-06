@@ -26,7 +26,7 @@
 
 #define AL_LOG_INFORMATION
 
-typedef unsigned char uchar;
+typedef unsigned char uchar_t;
 typedef enum {
   CONTROL_START = 0x02,
   CONTROL_END = 0x03,
@@ -148,7 +148,7 @@ int al_sendFile(const char *filename, int port) {
   unsigned int bytesTransferred = 0;
   while (true) {
     packet.size =
-        fread(&packet.data[L1_FIELD + 1], sizeof(uchar), al_frag_size, fptr);
+        fread(&packet.data[L1_FIELD + 1], sizeof(uchar_t), al_frag_size, fptr);
     if (packet.size <= 0) {
       break;
     }
@@ -250,17 +250,17 @@ int read_data_packet(int fd, data_packet *packet, char *buffer) {
   }
 
   packet->sequenceNr = buffer[SEQ_FIELD];
-  packet->size = (uchar)buffer[L2_FIELD] * 256;
-  packet->size += (uchar)buffer[L1_FIELD];
+  packet->size = (uchar_t)buffer[L2_FIELD] * 256;
+  packet->size += (uchar_t)buffer[L1_FIELD];
   packet->data = &buffer[L1_FIELD + 1];
   return 0;
 }
 
 int send_data_packet(int fd, data_packet *packet) {
   packet->data[CP_CFIELD] = CONTROL_DATA;
-  packet->data[SEQ_FIELD] = (uchar)packet->sequenceNr;
-  packet->data[L2_FIELD] = (uchar)(packet->size / 256);
-  packet->data[L1_FIELD] = (uchar)(packet->size % 256);
+  packet->data[SEQ_FIELD] = (uchar_t)packet->sequenceNr;
+  packet->data[L2_FIELD] = (uchar_t)(packet->size / 256);
+  packet->data[L1_FIELD] = (uchar_t)(packet->size % 256);
 
   int res = llwrite(fd, (char *)packet->data, packet->size + DATA_HEADER_SIZE);
 
@@ -273,7 +273,7 @@ int send_control_packet(int fd, control_type type) {
   build_control_packet(type, &buffer);
   printf("al: sent control Packet ");
   print_control_packet(&fileCP);
-  if (llwrite(fd, buffer.buffer, buffer.size) == -1) {
+  if (llwrite(fd, (char *)buffer.buffer, buffer.size) == -1) {
     al_log_msg("Failed to send packet, aborting..");
     return -1;
   }
@@ -352,7 +352,7 @@ int parse_control_packet(char *packetBuffer, int size, control_packet *cp) {
       al_log_msg("Invalid Control Packet");
       return -1;
     }
-    cp->size |= ((uchar)packetBuffer[index++]) << (8 * i);
+    cp->size |= ((uchar_t)packetBuffer[index++]) << (8 * i);
   }
 
   if ((index > (size - 1)) || (packetBuffer[index++] != TLV_NAME_T)) {
