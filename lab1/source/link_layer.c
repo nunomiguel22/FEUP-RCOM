@@ -444,7 +444,6 @@ int read_frame(int fd, char_buffer *frame) {
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
     read_status = read(fd, &inc_byte, 1);
   }
-  printf("\n\n\n%test = %x\n", inc_byte);
   char_buffer_push(frame, (uchar_t)inc_byte);
   // Reset vars
   read_status = 0;
@@ -677,7 +676,7 @@ int init_serial_port(int port, link_type type) {
 
   ltype = type;
 
-  int fd = open(ll.port, O_RDWR | O_NOCTTY | O_NONBLOCK);
+  int fd = open(ll.port, O_RDWR | O_NOCTTY);
   if (fd < 0) {
     perror(ll.port);
     return -1;
