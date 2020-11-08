@@ -541,6 +541,10 @@ void build_data_frame(char_buffer *frame, char *buffer, int length) {
     char_buffer_push(frame, bcc2);
 
   char_buffer_push(frame, (uchar_t)LL_FLAG);
+
+#ifdef LL_LOG_BUFFER
+  char_buffer_printHex(frame);
+#endif
 }
 
 char get_address_field(link_type lnk, ll_control_type type) {
