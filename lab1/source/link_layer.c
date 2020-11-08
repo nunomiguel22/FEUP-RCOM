@@ -12,8 +12,8 @@
 #include <signal.h>
 
 #define LL_LOG_INFORMATION  // Log general information
-#define LL_LOG_BUFFER       // Log entire frame
-#define LL_LOG_FRAMES       // Log frame headers
+//#define LL_LOG_BUFFER       // Log entire frame
+#define LL_LOG_FRAMES  // Log frame headers
 
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
