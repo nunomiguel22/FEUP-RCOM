@@ -715,9 +715,9 @@ int init_serial_port(int port, link_type type) {
   }
 
   /* Empty serial port buffer */
-  int ret = 3;
-  char tempchar;
-  while (ret >= 0) ret = read(fd, &tempchar, 1);
+  /*   int ret = 3;
+    char tempchar;
+    while (ret >= 0) ret = read(fd, &tempchar, 1); */
 
   return fd;
 }
