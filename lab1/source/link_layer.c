@@ -97,7 +97,6 @@ void sig_alarm_handler(int sig_num) {
   if (sig_num == SIGALRM) {
     ++transmission_attempts;
     alarm_triggered = true;
-    printf("YEEET\n");
   }
 }
 void set_alarm(unsigned int seconds) {
@@ -247,7 +246,6 @@ int llread(int fd, char **buffer) {
       char_buffer_destroy(&frame);
       continue;
     }
-    static bool yeet = false;
 
     // Check seq number for duplicate frames
     if ((frame.buffer[C_FIELD] >> 6) == (uchar_t)ll.sequence_number) {
@@ -294,11 +292,6 @@ int llread(int fd, char **buffer) {
       char_buffer_destroy(&packet);
       char_buffer_destroy(&frame);
       continue;
-    }
-
-    if (!yeet) {
-      sleep(30);
-      yeet = true;
     }
 
     // Frame read successfuly, flip seq number and reply with RR
@@ -451,7 +444,6 @@ int read_frame(int fd, char_buffer *frame) {
          (uchar_t)inc_byte != LL_FLAG) {  // TO-DO Implement timeout
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
     read_status = read(fd, &inc_byte, 1);
-    printf("YEEET\n");
   }
   char_buffer_push(frame, (uchar_t)inc_byte);
   // Reset vars
