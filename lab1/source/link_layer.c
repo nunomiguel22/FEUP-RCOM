@@ -436,7 +436,7 @@ int read_frame(int fd, char_buffer *frame) {
   if (frame == NULL) return LL_ERROR_GENERAL;
   char_buffer_init(frame, CONTROL_FRAME_SIZE);
 
-  char inc_byte = 0x00;
+  uchar_t inc_byte = 0x00;
   int read_status = 0;
   // Clear buffer and wait for a flag
   while (read_status <= 0 || inc_byte != LL_FLAG) {  // TO-DO Implement timeout
@@ -448,13 +448,17 @@ int read_frame(int fd, char_buffer *frame) {
   read_status = 0;
   inc_byte = 0x00;
   // Read serial until flag is found
+  int in = 0;
   while (inc_byte != LL_FLAG) {
     read_status = read(fd, &inc_byte, 1);
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
     if (read_status <= 0) continue;
 
     char_buffer_push(frame, inc_byte);
+    ++in;
   }
+
+  printf("Frame read %d bytes\n", in);
 
   ++stats.frames_total;
 
