@@ -436,19 +436,20 @@ int read_frame(int fd, char_buffer *frame) {
   if (frame == NULL) return LL_ERROR_GENERAL;
   char_buffer_init(frame, CONTROL_FRAME_SIZE);
 
-  uchar_t inc_byte = 0x00;
+  char inc_byte = 0x00;
   int read_status = 0;
   // Clear buffer and wait for a flag
-  while (read_status <= 0 || inc_byte != LL_FLAG) {  // TO-DO Implement timeout
+  while (read_status <= 0 ||
+         (uchar_t)inc_byte != LL_FLAG) {  // TO-DO Implement timeout
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
     read_status = read(fd, &inc_byte, 1);
   }
-  char_buffer_push(frame, inc_byte);
+  printf("\n\n\n%test = %x\n", inc_byte);
+  char_buffer_push(frame, (uchar_t)inc_byte);
   // Reset vars
   read_status = 0;
   inc_byte = 0x00;
   // Read serial until flag is found
-  int in = 0;
   while (inc_byte != LL_FLAG) {
     read_status = read(fd, &inc_byte, 1);
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
