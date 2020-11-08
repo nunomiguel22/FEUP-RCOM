@@ -140,6 +140,8 @@ void sig_int_handler(int sig) {
  *
  */
 
+void llabort(int fd) { close_serial_port(fd); }
+
 void ll_setup(int timeout, int max_retries, int baudrate) {
   ll.timeout = timeout;
   ll.num_transmissions = max_retries;

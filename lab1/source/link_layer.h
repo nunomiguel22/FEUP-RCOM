@@ -39,6 +39,11 @@ typedef struct {
 typedef enum { TRANSMITTER = 0x00, RECEIVER = 0x01 } link_type;
 
 /**
+ * Closes fd and resets termios
+ *
+ */
+void llabort(int fd);
+/**
  * Sets connection settings
  *
  * @param timeout Seconds until a frame with no response times out

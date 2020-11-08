@@ -155,7 +155,11 @@ int al_sendFile(const char *filename, int port) {
     ++al_stats.data_packet_count;
     ++packet.sequenceNr;
     packet.sequenceNr %= 256;
-    send_data_packet(fd, &packet);
+    if (send_data_packet(fd, &packet) == 1) {
+      al_log_msg("file transmission failed, aborting...");
+      llabort(fd);
+      return -1;
+    }
 
     // Progress
     bytesTransferred += packet.size;
