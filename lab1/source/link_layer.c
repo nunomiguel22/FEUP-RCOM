@@ -238,7 +238,11 @@ int llread(int fd, char **buffer) {
 
     // Ignore
     if (!is_frame_control_type(&frame, LL_INF)) {
-      log_msg("frame ignored - unexpected control field");
+      if (is_frame_control_type(&frame, LL_SET)) {
+        log_msg("frame ignored - unexpected SET control");
+        send_control_frame(fd, LL_UA);
+      } else
+        log_msg("frame ignored - unexpected control field");
       char_buffer_destroy(&frame);
       continue;
     }
@@ -255,7 +259,7 @@ int llread(int fd, char **buffer) {
 
     uchar_t bcc2 = 0x00;  // Calculated BCC2
     // Get the packet BBC2 value, check for ESC_MOD
-    uchar_t packet_bcc2 = (uchar_t)frame.buffer[frame.size - 2];
+    uchar_t packet_bcc2 = frame.buffer[frame.size - 2];
     unsigned int dataLimit = frame.size - 2;
 
     // Adjust for BCC2 escape flag
@@ -281,7 +285,9 @@ int llread(int fd, char **buffer) {
 
     // BCC2 check
     if (bcc2 != packet_bcc2) {
-      log_msg("frame rejected - failed BBC2 check");
+      printf(
+          "al: frame rejected - failed BBC2 check, expected: %x, received %x",
+          packet_bcc2, bcc2);
       send_control_frame(fd, LL_REJ);
       char_buffer_destroy(&packet);
       char_buffer_destroy(&frame);
