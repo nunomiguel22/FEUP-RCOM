@@ -54,13 +54,10 @@
             "request": "launch",
             "program": "/mnt/f/Projects/Visual Code Projects/FEUP-RCOM/lab1/RCOM",
             "args": [
-                "files/large.jpg",
+                "/usr/pinguim.gif",
                 "T",
                 "11",
-                "-timeout=4",
-                "-baudrate=460800",
-                "-max_retries=3",
-                "-frag_size=5123"
+                "-frag_size=6000"
             ],
             "stopAtEntry": false,
             "cwd": ".",

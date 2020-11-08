@@ -97,6 +97,7 @@ void sig_alarm_handler(int sig_num) {
   if (sig_num == SIGALRM) {
     ++transmission_attempts;
     alarm_triggered = true;
+    printf("YEEET\n");
   }
 }
 void set_alarm(unsigned int seconds) {
@@ -246,6 +247,7 @@ int llread(int fd, char **buffer) {
       char_buffer_destroy(&frame);
       continue;
     }
+    static bool yeet = false;
 
     // Check seq number for duplicate frames
     if ((frame.buffer[C_FIELD] >> 6) == (uchar_t)ll.sequence_number) {
@@ -292,6 +294,11 @@ int llread(int fd, char **buffer) {
       char_buffer_destroy(&packet);
       char_buffer_destroy(&frame);
       continue;
+    }
+
+    if (!yeet) {
+      sleep(30);
+      yeet = true;
     }
 
     // Frame read successfuly, flip seq number and reply with RR
@@ -366,12 +373,13 @@ int frame_exchange(int fd, char_buffer *frame, ll_control_type reply) {
   while (transmission_attempts < ll.num_transmissions) {
     send_frame(fd, frame);
     set_alarm(ll.timeout);
-
     while (true) {
       char_buffer reply_frame;
       int res = read_frame(fd, &reply_frame);
+
       // Timeout or invalid frame received
       if (res == -1) {
+        tcflush(fd, TCIOFLUSH);
         char_buffer_destroy(&reply_frame);
         break;
       }
@@ -443,6 +451,7 @@ int read_frame(int fd, char_buffer *frame) {
          (uchar_t)inc_byte != LL_FLAG) {  // TO-DO Implement timeout
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
     read_status = read(fd, &inc_byte, 1);
+    printf("YEEET\n");
   }
   char_buffer_push(frame, (uchar_t)inc_byte);
   // Reset vars
@@ -450,10 +459,9 @@ int read_frame(int fd, char_buffer *frame) {
   inc_byte = 0x00;
   // Read serial until flag is found
   while (inc_byte != LL_FLAG) {
-    read_status = read(fd, &inc_byte, 1);
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
     if (read_status <= 0) continue;
-
+    read_status = read(fd, &inc_byte, 1);
     char_buffer_push(frame, inc_byte);
   }
 
@@ -714,13 +722,6 @@ int init_serial_port(int port, link_type type) {
     return -1;
   }
 
-  /* Empty serial port buffer */
-  /*   int ret = 3;
-    char tempchar;
-    while (ret >= 0) {
-      ret = read(fd, &tempchar, 1);
-      printf("TEST =%d\n", ret);
-    } */
   return fd;
 }
 
