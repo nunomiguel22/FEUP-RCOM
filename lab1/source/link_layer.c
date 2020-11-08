@@ -286,8 +286,8 @@ int llread(int fd, char **buffer) {
     // BCC2 check
     if (bcc2 != packet_bcc2) {
       printf(
-          "al: frame rejected - failed BBC2 check, expected: %x, received %x",
-          packet_bcc2, bcc2);
+          "ll: frame rejected - failed BBC2 check, expected: %x, received %x\n",
+          bcc2, packet_bcc2);
       send_control_frame(fd, LL_REJ);
       char_buffer_destroy(&packet);
       char_buffer_destroy(&frame);
@@ -525,21 +525,21 @@ void build_data_frame(char_buffer *frame, char *buffer, int length) {
     // BCC2
     bcc2 ^= (uchar_t)buffer[i];
     // Byte stuffing
-    if (buffer[i] == LL_FLAG || buffer[i] == LL_ESC) {
-      char_buffer_push(frame, LL_ESC);
-      char_buffer_push(frame, buffer[i] ^ LL_ESC_MOD);
+    if (buffer[i] == (uchar_t)LL_FLAG || buffer[i] == (uchar_t)LL_ESC) {
+      char_buffer_push(frame, (uchar_t)LL_ESC);
+      char_buffer_push(frame, buffer[i] ^ (uchar_t)LL_ESC_MOD);
     } else
       char_buffer_push(frame, buffer[i]);
   }
 
   // Bytestuffin on BBC2 when needed
-  if (bcc2 == LL_ESC || bcc2 == LL_FLAG) {
-    char_buffer_push(frame, LL_ESC);
-    char_buffer_push(frame, bcc2 ^ LL_ESC_MOD);
+  if (bcc2 == (uchar_t)LL_ESC || bcc2 == (uchar_t)LL_FLAG) {
+    char_buffer_push(frame, (uchar_t)LL_ESC);
+    char_buffer_push(frame, (uchar_t)(bcc2 ^ (uchar_t)LL_ESC_MOD));
   } else
     char_buffer_push(frame, bcc2);
 
-  char_buffer_push(frame, LL_FLAG);
+  char_buffer_push(frame, (uchar_t)LL_FLAG);
 }
 
 char get_address_field(link_type lnk, ll_control_type type) {
