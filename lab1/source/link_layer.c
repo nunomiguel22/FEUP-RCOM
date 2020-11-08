@@ -12,8 +12,8 @@
 #include <signal.h>
 
 #define LL_LOG_INFORMATION  // Log general information
-//#define LL_LOG_BUFFER  // Log entire frame
-#define LL_LOG_FRAMES  // Log frame headers
+#define LL_LOG_BUFFER       // Log entire frame
+#define LL_LOG_FRAMES       // Log frame headers
 
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
@@ -455,10 +455,7 @@ int read_frame(int fd, char_buffer *frame) {
     if (read_status <= 0) continue;
 
     char_buffer_push(frame, inc_byte);
-    ++in;
   }
-
-  printf("Frame read %d bytes\n", in);
 
   ++stats.frames_total;
 
