@@ -177,8 +177,8 @@ int llclose(int fd) {
     char_buffer_destroy(&discFrame);
 
     // Send UA
-    usleep(5);
     send_control_frame(fd, LL_UA);
+    usleep(5);
     log_msg("llclose - disconnected.\n");
     close_serial_port(fd);
     return 1;
