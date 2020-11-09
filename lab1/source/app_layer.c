@@ -178,12 +178,12 @@ int al_sendFile(const char *filename, int port) {
   // Send end control packet
   if (send_control_packet(fd, CONTROL_END) == -1) return -1;
   printf("al: file transmission is over\n");
-
+  update_statistics(&start_timer);
   // Close connection and cleanup
   llclose(fd);
   free(fileCP.name);
   fclose(fptr);
-  update_statistics(&start_timer);
+
   return 0;
 }
 
@@ -242,11 +242,12 @@ int al_receiveFile(const char *filename, int port) {
     read_control_packet(fd, &packet);
   }
   printf("al: file transmission is over\n");
+  update_statistics(&start_timer);
   // Close connection and cleanup
   free(fileCP.name);
   llclose(fd);
   fclose(fptr);
-  update_statistics(&start_timer);
+
   return 0;
 }
 
