@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/time.h>
 
 #define DEFAULT_MAX_TRANSMISSION_ATTEMPS 3
 #define DEFAULT_TIMEOUT_DURATION 3
@@ -30,7 +31,6 @@ int main(int argc, char** argv) {
     print_usage(argv[0]);
     return -1;
   }
-
   char* file_name = argv[1];  // File name
 
   // Read link type

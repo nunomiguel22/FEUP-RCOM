@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/time.h>
 #include <time.h>
 
 #define AL_PRINT_CPACKETS
@@ -68,13 +69,15 @@ void al_log_msg(const char *msg) {
 #endif
 }
 
-float clock_seconds_since(clock_t start) {
-  printf("CLOCK %f\n", (float)start);
-  printf("CLOCK %f\n", (float)clock());
-  return ((float)(clock() - start) / (float)CLOCKS_PER_SEC);
+float clock_seconds_since(struct timeval *start_timer) {
+  struct timeval end_timer;
+  gettimeofday(&end_timer, NULL);
+  float elapsed = (end_timer.tv_sec - start_timer->tv_sec);
+  elapsed += (end_timer.tv_usec - start_timer->tv_usec) / 1000000.0f;
+  return elapsed;
 }
 
-void update_statistics(clock_t start_timer) {
+void update_statistics(struct timeval *start_timer) {
   al_stats.file_size = fileCP.size;
   al_stats.transmission_duration_secs = clock_seconds_since(start_timer);
   ll_statistics ll_stats = ll_get_stats();
@@ -88,9 +91,11 @@ al_statistics al_get_stats() { return al_stats; }
 
 void al_print_stats() {
   printf("Statistics:\n");
-  float eff = (float)al_stats.avg_bits_per_second / (float)al_stats.baudrate;
-  printf(" baudrate %d bits/s \taverage bitrate %d bits/s \tEfficiency %.2f \n",
-         al_stats.baudrate, al_stats.avg_bits_per_second, eff);
+  float eff =
+      (float)al_stats.avg_bits_per_second / (float)al_stats.baudrate * 100.0f;
+  printf(
+      " baudrate %d bits/s \taverage bitrate %d bits/s \tEfficiency %.2f%% \n",
+      al_stats.baudrate, al_stats.avg_bits_per_second, eff);
   printf(" file size %d bytes \tmax fragment size %d bytes \tpackets sent %d\n",
          al_stats.file_size, al_frag_size, al_stats.data_packet_count);
   printf(" transmission time %.2f seconds\n",
@@ -136,10 +141,11 @@ int al_sendFile(const char *filename, int port) {
   // Get File Information
   get_file_info(filename, fptr);
 
-  clock_t start_timer = clock();
-
   // Send start control packet
   if (send_control_packet(fd, CONTROL_START) == -1) return -1;
+
+  struct timeval start_timer;
+  gettimeofday(&start_timer, NULL);
   printf("al: starting file transmission\n");
 
   // Send data packets until the file is read
@@ -162,7 +168,6 @@ int al_sendFile(const char *filename, int port) {
       llabort(fd);
       return -1;
     }
-
     // Progress
     bytesTransferred += packet.size;
     print_progress(bytesTransferred, fileCP.size);
@@ -174,12 +179,11 @@ int al_sendFile(const char *filename, int port) {
   if (send_control_packet(fd, CONTROL_END) == -1) return -1;
   printf("al: file transmission is over\n");
 
-  update_statistics(start_timer);
-
   // Close connection and cleanup
   llclose(fd);
   free(fileCP.name);
   fclose(fptr);
+  update_statistics(&start_timer);
   return 0;
 }
 
@@ -200,12 +204,14 @@ int al_receiveFile(const char *filename, int port) {
     al_log_msg("Could not write selected file");
     return -1;
   }
-  clock_t start_timer = clock();
 
   fileCP.type = CONTROL_DATA;
   while (fileCP.type != CONTROL_START) {
     read_control_packet(fd, &fileCP);
   }
+
+  struct timeval start_timer;
+  gettimeofday(&start_timer, NULL);
   printf("al: starting file transmission\n");
 
   unsigned int bytesTransferred = 0;
@@ -235,11 +241,12 @@ int al_receiveFile(const char *filename, int port) {
   while (packet.type != CONTROL_END) {
     read_control_packet(fd, &packet);
   }
-  update_statistics(start_timer);
   printf("al: file transmission is over\n");
   // Close connection and cleanup
   free(fileCP.name);
   llclose(fd);
+  fclose(fptr);
+  update_statistics(&start_timer);
   return 0;
 }
 
