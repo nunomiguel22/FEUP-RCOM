@@ -68,8 +68,10 @@ void al_log_msg(const char *msg) {
 #endif
 }
 
-double clock_seconds_since(clock_t start) {
-  return ((double)(clock() - start) / (double)CLOCKS_PER_SEC);
+float clock_seconds_since(clock_t start) {
+  printf("CLOCK %f\n", (float)start);
+  printf("CLOCK %f\n", (float)clock());
+  return ((float)(clock() - start) / (float)CLOCKS_PER_SEC);
 }
 
 void update_statistics(clock_t start_timer) {
@@ -79,7 +81,7 @@ void update_statistics(clock_t start_timer) {
   al_stats.frames_total = ll_stats.frames_total;
   al_stats.frames_lost = ll_stats.frames_lost;
   al_stats.avg_bits_per_second =
-      (double)(al_stats.file_size * 8) / al_stats.transmission_duration_secs;
+      (float)(al_stats.file_size * 8) / al_stats.transmission_duration_secs;
 }
 
 al_statistics al_get_stats() { return al_stats; }
