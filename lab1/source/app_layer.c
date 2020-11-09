@@ -86,7 +86,7 @@ al_statistics al_get_stats() { return al_stats; }
 
 void al_print_stats() {
   printf("Statistics:\n");
-  float eff = (float)al_stats.baudrate / (float)al_stats.avg_bits_per_second;
+  float eff = (float)al_stats.avg_bits_per_second / (float)al_stats.baudrate;
   printf(" baudrate %d bits/s \taverage bitrate %d bits/s \tEfficiency %.2f \n",
          al_stats.baudrate, al_stats.avg_bits_per_second, eff);
   printf(" file size %d bytes \tmax fragment size %d bytes \tpackets sent %d\n",

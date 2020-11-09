@@ -452,8 +452,8 @@ int read_frame(int fd, char_buffer *frame) {
   // Read serial until flag is found
   while (inc_byte != LL_FLAG) {
     if (was_alarm_triggered()) return LL_ERROR_GENERAL;
-    if (read_status <= 0) continue;
     read_status = read(fd, &inc_byte, 1);
+    if (read_status <= 0) continue;
     char_buffer_push(frame, inc_byte);
   }
 
