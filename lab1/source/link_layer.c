@@ -178,7 +178,7 @@ int llclose(int fd) {
 
     // Send UA
     send_control_frame(fd, LL_UA);
-    usleep(5);
+    usleep(50);
     log_msg("llclose - disconnected.\n");
     close_serial_port(fd);
     return 1;
@@ -699,7 +699,7 @@ int init_serial_port(int port, link_type type) {
   /* set input mode (non-canonical, no echo,...) */
   newtio.c_lflag = 0;
 
-  newtio.c_cc[VTIME] = 10; /* inter-character timer unused */
+  newtio.c_cc[VTIME] = 20; /* inter-character timer unused */
   newtio.c_cc[VMIN] = 0;   /* blocking read until 5 chars received */
 
   /*

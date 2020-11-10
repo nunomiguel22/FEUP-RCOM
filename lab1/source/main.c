@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/time.h>
 
 #define DEFAULT_MAX_TRANSMISSION_ATTEMPS 3
 #define DEFAULT_TIMEOUT_DURATION 3
