@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #include <time.h>
 
-#define AL_PRINT_CPACKETS
+//#define AL_PRINT_CPACKETS
 
 #define MAX_FRAGMENT_SIZE 0xFFFF
 #define MAX_BAUDRATE 460800
