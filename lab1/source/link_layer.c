@@ -16,8 +16,8 @@
 //#define LL_LOG_FRAMES  // Log frame headers
 
 /*FER Testing */
-#define FER
-#define FERPROB 0
+//#define FER
+#define FERPROB 20
 
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
@@ -301,7 +301,7 @@ int llread(int fd, char **buffer) {
 
 #ifdef FER
     unsigned int randomN = rand() % 100;
-    if (randomN > FERPROB) {
+    if (randomN < FERPROB) {
       send_control_frame(fd, LL_REJ);
       char_buffer_destroy(&packet);
       char_buffer_destroy(&frame);
@@ -394,8 +394,8 @@ int frame_exchange(int fd, char_buffer *frame, ll_control_type reply) {
       bool is_rej = is_frame_control_type(&reply_frame, LL_REJ);
       bool is_rr = is_frame_control_type(&reply_frame, LL_RR);
 
-      // Verify if RR or REJ is a duplicate
-      if (is_rej || is_rr) {
+      // Verify if RR is a duplicate
+      if (is_rr) {
         uchar_t replySeq = ((uchar_t)(reply_frame.buffer[C_FIELD]) >> 7);
         if (replySeq != (uchar_t)(ll.sequence_number)) {
           log_msg("frame ignored - duplicate");
@@ -404,8 +404,15 @@ int frame_exchange(int fd, char_buffer *frame, ll_control_type reply) {
           continue;
         }
       }
-      // Received REJ, resend frame
+      // Received REJ, resend frame if not duplicate
       if (is_rej) {
+        uchar_t replySeq = ((uchar_t)(reply_frame.buffer[C_FIELD]) >> 7);
+        if (replySeq != (uchar_t)(ll.sequence_number ^ 1)) {
+          log_msg("frame ignored - duplicate");
+          ++stats.frames_lost;
+          char_buffer_destroy(&reply_frame);
+          continue;
+        }
         char_buffer_destroy(&reply_frame);
         log_msg("frame Rejected by receiver");
         ++stats.frames_lost;

@@ -31,8 +31,9 @@ int main(int argc, char** argv) {
     print_usage(argv[0]);
     return -1;
   }
-  char* file_name = argv[1];  // File name
   srand(time(0));
+
+  char* file_name = argv[1];  // File name
   // Read link type
   link_type type = RECEIVER;
   if (argv[2][0] == 'T') type = TRANSMITTER;
