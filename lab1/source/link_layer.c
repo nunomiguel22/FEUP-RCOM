@@ -15,6 +15,10 @@
 //#define LL_LOG_BUFFER       // Log entire frame
 //#define LL_LOG_FRAMES  // Log frame headers
 
+/*FER Testing */
+#define FER
+#define FERPROB 0
+
 /* POSIX compliant source */
 #define _POSIX_SOURCE 1
 
@@ -295,6 +299,15 @@ int llread(int fd, char **buffer) {
       continue;
     }
 
+#ifdef FER
+    unsigned int randomN = rand() % 100;
+    if (randomN > FERPROB) {
+      send_control_frame(fd, LL_REJ);
+      char_buffer_destroy(&packet);
+      char_buffer_destroy(&frame);
+      continue;
+    }
+#endif
     // Frame read successfuly, flip seq number and reply with RR
     ll.sequence_number ^= 1;
     send_control_frame(fd, LL_RR);
