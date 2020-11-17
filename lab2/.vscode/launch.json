@@ -1,0 +1,92 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "WSL - RECEIVER",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/mnt/f/Projects/Visual Code Projects/FEUP-RCOM/lab1/RCOM",
+            "args": [
+                "files/large2.jpg",
+                "R",
+                "10",
+            ],
+            "stopAtEntry": false,
+            "cwd": ".",
+            "environment": [],
+            "externalConsole": true,
+            "pipeTransport": {
+                "debuggerPath": "/usr/bin/gdb",
+                "pipeProgram": "${env:windir}\\sysnative\\bash.exe",
+                "pipeArgs": [
+                    "-c"
+                ],
+                "pipeCwd": "${fileDirname}"
+            },
+            "logging": {
+                "engineLogging": true,
+                "trace": true
+            },
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "targetArchitecture": "x64",
+            "preLaunchTask": "Build - WSL - Debug",
+            "sourceFileMap": {
+                "/mnt/c": "c:\\",
+                "/mnt/f/": "f:\\",
+                //Change to glibc folder 
+                "\\build\\glibc-OTsEL5\\glibc-2.27\\": "F:\\Development\\Tools\\glibc-2.27",
+                "\\usr\\include\\c++\\8\\ext\\": "F:\\Development\\Tools\\MinGW\\include\\c++\\8.2.0\\ext",
+            }
+        },
+        {
+            "name": "WSL - TRANSMITTER",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/mnt/f/Projects/Visual Code Projects/FEUP-RCOM/lab1/RCOM",
+            "args": [
+                "/usr/pinguim.gif",
+                "T",
+                "11",
+                "-frag_size=6000"
+            ],
+            "stopAtEntry": false,
+            "cwd": ".",
+            "environment": [],
+            "externalConsole": true,
+            "pipeTransport": {
+                "debuggerPath": "/usr/bin/gdb",
+                "pipeProgram": "${env:windir}\\sysnative\\bash.exe",
+                "pipeArgs": [
+                    "-c"
+                ],
+                "pipeCwd": "${fileDirname}"
+            },
+            "logging": {
+                "engineLogging": true,
+                "trace": true
+            },
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "targetArchitecture": "x64",
+            "preLaunchTask": "Build - WSL - Debug",
+            "sourceFileMap": {
+                "/mnt/c": "c:\\",
+                "/mnt/f/": "f:\\",
+                //Change to glibc folder 
+                "\\build\\glibc-OTsEL5\\glibc-2.27\\": "F:\\Development\\Tools\\glibc-2.27",
+                "\\usr\\include\\c++\\8\\ext\\": "F:\\Development\\Tools\\MinGW\\include\\c++\\8.2.0\\ext",
+            }
+        }
+    ],
+}
