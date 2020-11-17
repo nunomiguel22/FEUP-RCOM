@@ -14,5 +14,6 @@
         "ostream": "c",
         "tuple": "c",
         "type_traits": "c"
-    }
+    },
+    "C_Cpp.default.compilerPath": "usr/bin",
 }
