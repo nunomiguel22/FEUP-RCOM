@@ -1,7 +1,8 @@
 bin/*
 lab1/RCOM
-lab1/RCOM_T
-lab1/RCOM_R
 lab1/build/*
 lab1/build/source/*
 lab1/files/downloads/*
+lab2/RCOM
+lab2/build/*
+lab2/build/source/*

@@ -15,7 +15,7 @@ SRC := $(wildcard source/**/**/**/**/*.c) $(wildcard source/**/**/**/*.c) $(wild
 OBJ := $(patsubst %.c,$(BUILD_PATH)/%.o,$(SRC))
 
 #Executable Name
-EXEC = RCOM
+EXEC = download
 
 all: $(EXEC)
 

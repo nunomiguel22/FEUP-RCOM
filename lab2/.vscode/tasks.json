@@ -21,42 +21,6 @@
       "problemMatcher": []
     },
     {
-      "label": "Build - WSL - Debug",
-      "command": "make DEBUGFLAG=\"-g\"",
-      "type": "shell",
-      "problemMatcher": [],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "options": {
-        "shell": {
-          "executable": "bash.exe",
-          "args": [
-            "-c"
-          ]
-        }
-      }
-    },
-    {
-      "label": "Build - WSL - Optimized",
-      "command": "make DEBUGFLAG=\"-O2\"",
-      "type": "shell",
-      "problemMatcher": [],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "options": {
-        "shell": {
-          "executable": "bash.exe",
-          "args": [
-            "-c"
-          ]
-        }
-      }
-    },
-    {
       "type": "shell",
       "label": "Clean",
       "command": "make clean",
