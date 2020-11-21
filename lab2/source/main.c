@@ -1,8 +1,6 @@
 #include "ftp_app/ftp_app.h"
 #include "utils/utils.h"
 
-
-
 int main(int argc, char *argv[]) {
 
   char *user, *password, *server, *filepath, *filename;
