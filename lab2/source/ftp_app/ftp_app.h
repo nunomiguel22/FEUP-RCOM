@@ -4,7 +4,7 @@
 
 
 
-
+int tcp_connect(char *server);
 
 
 
