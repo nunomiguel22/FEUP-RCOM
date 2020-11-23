@@ -76,8 +76,9 @@ void parseArguments(int argc, char *argv[], char **user, char** password, char *
   *filename = basename(ftp_command);
 }
 
-void cleanup(char *user, char* password, char *server, int socket_fd){
+void cleanup(char *user, char* password, char *server, int socket_fd, int data_socket_fd){
   close(socket_fd);
+  close(data_socket_fd);
    if (server != NULL)
     free(server);
    if (password != NULL)
