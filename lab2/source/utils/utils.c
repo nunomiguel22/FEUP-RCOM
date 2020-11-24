@@ -72,8 +72,9 @@ void parseArguments(int argc, char *argv[], char **user, char** password, char *
   ftp_command += res + 1; 
 
   //Read file name
-  *filepath = dirname(ftp_command);
   *filename = basename(ftp_command);
+  *filepath = dirname(ftp_command);
+  
 }
 
 void cleanup(char *user, char* password, char *server, int socket_fd, int data_socket_fd){

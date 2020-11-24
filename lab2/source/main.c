@@ -15,9 +15,10 @@ int main(int argc, char *argv[]) {
   ftp_enter_passive_mode(socket_fd, client_ip, &client_port);
 
   int data_socket_fd = ftp_connect_socket(client_ip, client_port);
+  ftp_retrieve_file(socket_fd, filepath, filename);
+  ftp_download(data_socket_fd, filename);
 
-  /* RETRIEVE FILE retr */
-  /* Download */
+  //VERIFY RETR ERROR
 
   cleanup(username, password, server, socket_fd, data_socket_fd);
   return 0;

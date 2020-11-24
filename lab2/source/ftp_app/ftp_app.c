@@ -18,6 +18,7 @@
 #define FTP_CODE_NEED_PASSWORD "331"
 #define FTP_CODE_LOGIN_SUCCESS "230"
 #define FTP_CODE_PASSIVE_MODE "227"
+#define FTP_BUFFER_SIZE 30000
  
 bool read_return_code(int socket_fd, char expected_return[]){
 
@@ -152,3 +153,42 @@ void ftp_enter_passive_mode(int socket_fd, char *client_ip, int *client_port){
     
     printf("entered passive mode: %s:%d\n", client_ip, *client_port);
 }
+
+void ftp_retrieve_file(int socket_fd, char *filepath, char *filename){
+
+    if (!send_command(socket_fd, "TYPE L 8\r\n", FTP_CODE_CONFIRM) || filepath == NULL
+            || filename == NULL){
+        fprintf(stderr, "failed to retrieve file\n");
+        exit(-1);
+    }
+
+    char cmd[8 + strlen(filename) + strlen(filepath)];
+    sprintf(cmd, "RETR %s/%s\r\n", filepath, filename);
+	send_command(socket_fd, cmd, NULL);    
+}
+
+void ftp_download(int data_fd, char * filename){
+    FILE *fp = fopen(filename, "w");
+    if( fp == NULL ){
+        fprintf(stderr, "failed to open file\n");
+        exit(-1);
+    }
+    
+    printf("\nStarting download\n");
+    char buffer[FTP_BUFFER_SIZE];
+    int prog = 0;
+    while(true){
+        ++prog;
+        int byte_count = read(data_fd, buffer, FTP_BUFFER_SIZE);
+        if (byte_count == 0)
+            break;
+        fwrite(buffer, byte_count, 1,  fp);
+        printf("\rdownloading");
+        for (int i = 0; i < prog % 5; ++i)
+            printf(".");
+    }
+    
+    fclose(fp);
+    printf("\ndownload finished\n\n");
+}
+
