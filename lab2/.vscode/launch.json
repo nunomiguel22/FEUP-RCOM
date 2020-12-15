@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}\\download", //Change to executable name
             "args": [
-                "ftp://test:pw@host.com/file.f"
+                "ftp://ftp.up.pt/pub/CPAN/robots.txt",
             ],
             "stopAtEntry": false,
             "linux": {
@@ -45,7 +45,7 @@
             "request": "launch",
             "program": "${workspaceFolder}\\download", //Change to executable name
             "args": [
-                "ftp://test:pw@host.com/file.f"
+                "ftp://ftp.up.pt/pub/CPAN/robots.txt"
             ],
             "stopAtEntry": false,
             "linux": {

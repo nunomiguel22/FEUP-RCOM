@@ -1,6 +1,0 @@
-telnet - 23
-smtp - 25
-pop3 - 110
-ftp - 21
-
-ftp.up.pt

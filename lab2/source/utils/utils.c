@@ -55,14 +55,18 @@ void parseArguments(int argc, char *argv[], char **user, char** password, char *
 
   // Read username
   int res = chop_string(ftp_command, user, ':');
-  if (res == -1)
-    abort_bad_url();
+  if (res == -1){
+    *user = (char *)malloc(10 * sizeof(char));
+    memcpy(*user, "anonymous", 9);
+  }
   ftp_command += res + 1; 
 
   // Read password
   res = chop_string(ftp_command, password, '@');
-  if (res == -1)
-    abort_bad_url();
+  if (res == -1){
+    *password = (char *)malloc(2 * sizeof(char));
+    memcpy(*password, "", 1);
+  }
   ftp_command += res + 1; 
 
   // Read server name
