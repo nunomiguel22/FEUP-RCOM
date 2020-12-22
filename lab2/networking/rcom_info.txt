@@ -59,7 +59,7 @@ Configurar switch:
 	conf t
 	no vlan 2-4094
 	exit
-	copy flash:gnuY-clean startup-config ou copy flash:T5G9-AEFG startup-config - (config guardada)
+	copy flash:gnuY-clean startup-config ou copy flash:T5G9 startup-config - (config guardada)
 	reload
 	
 	// Criar VLans

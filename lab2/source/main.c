@@ -18,8 +18,6 @@ int main(int argc, char *argv[]) {
   ftp_retrieve_file(socket_fd, filepath, filename);
   ftp_download(data_socket_fd, filename);
 
-  //VERIFY RETR ERROR
-
   cleanup(username, password, server, socket_fd, data_socket_fd);
   return 0;
 }
