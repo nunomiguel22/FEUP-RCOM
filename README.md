@@ -1,1 +1,151 @@
 # FEUP-RCOM
+
+Networking guide for lab2
+
+IP/MACS:
+	tux3 eth0: 172.16.60.1
+	tux4 eth0: 172.16.60.254 eth1: 172.16.61.253
+	tux2 eth0: 172.16.61.1
+
+portas no switch:
+	tux2 eth0 		- porta 2
+	tux3 eth0 		- porta 1
+	tux4 eth0 		- porta 13
+	tux4 eth1 		- porta 5
+	router feo/0 	- porta 9
+
+tux3:
+	updateimage
+	service networking restart
+	
+	ifconfig eth0 172.16.60.1/24
+	route add default gw 172.16.60.254
+	
+	echo 1 > /proc/sys/net/ipv4/ip_forward
+	echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+	
+	nano /etc/resolv.conf
+	search netlab.fe.up.pt
+	nameserver 172.16.1.1
+
+tux4:
+	updateimage
+	service networking restart
+	
+	ifconfig eth0 172.16.60.254/24
+	
+	ifconfig eth1 up
+	ifconfig eth1 172.16.61.253/24
+	route add default gw 172.16.61.254
+	
+	echo 1 > /proc/sys/net/ipv4/ip_forward
+	echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+	
+tux2:
+	updateimage
+	service networking restart
+	
+	ifconfig eth0 172.16.61.1/24
+	
+	route add default gw 172.16.61.254
+	route add -net 172.16.60.0/24 gw 172.16.61.253
+	
+	echo 1 > /proc/sys/net/ipv4/ip_forward
+	echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+	echo 0 > /proc/sys/net/ipv4/conf/eth0/accept_redirects 
+	echo 0 > /proc/sys/net/ipv4/conf/all/accept_redirects
+	
+Configurar switch:
+
+	// RESET SWITCH
+	enable
+	pass:8nortel
+	conf t
+	no vlan 2-4094
+	exit
+	copy flash:gnuY-clean startup-config ou copy flash:T5G9 startup-config - (config guardada)
+	reload
+	
+	// Criar VLans
+	conf t
+	vlan 60
+	exit
+	vlan 61
+	exit
+	
+	//Ligar interfaces às VLans
+
+	-tux3 eth0
+	conf t
+	interface fastethernet 0/1
+	switchport mode access
+	switchport access vlan 60
+	exit
+
+	-tux4 eth0
+	conf t
+	interface fastethernet 0/13
+	switchport mode access
+	switchport access vlan 60
+	exit
+
+	-tux4 eth1
+	conf t
+	interface fastethernet 0/5
+	switchport mode access
+	switchport access vlan 61
+	exit
+
+	-tux2 eth0
+	conf t
+	interface fastethernet 0/2
+	switchport mode access
+	switchport access vlan 61
+	exit
+
+	-router
+	conf t
+	interface fastethernet 0/9
+	switchport mode access
+	switchport access vlan 61
+	exit
+	
+	
+Configurar router:
+
+	// RESET ROUTER
+	username: root	
+	pass:8nortel
+	copy flash:gnuY-clean startup-config ou copy flash:T5G9-AEFG startup-config - (config guardada)
+	reload
+
+	
+	enable
+	pass:8nortel
+	conf t
+
+	//Ligar interfaces a endereços IP
+
+	interface fastethernet 0/0
+	ip address 172.16.61.254 255.255.255.0
+	no shutdown
+	ip nat inside
+	exit
+	
+	interface fastethernet 0/1
+	ip address 172.16.1.69 255.255.255.0
+	no shutdown
+	ip nat outside
+	exit
+	
+	// Configuraçao NAT
+	
+	ip nat pool ovrld 172.16.1.69 172.16.1.69 prefix 24
+	ip nat inside source list 1 pool ovrld overload
+
+	access-list 1 permit 172.16.60.0 0.0.0.7 
+	access-list 1 permit 172.16.61.0 0.0.0.7
+	
+	ip route 0.0.0.0 0.0.0.0 172.16.1.254
+	ip route 172.16.60.0 255.255.255.0 172.16.61.253
+	end
