@@ -3,16 +3,16 @@
 Networking guide for lab2
 
 IP/MACS:
-	tux3 eth0: 172.16.60.1
-	tux4 eth0: 172.16.60.254 eth1: 172.16.61.253
-	tux2 eth0: 172.16.61.1
+* tux3 eth0: 172.16.60.1
+* tux4 eth0: 172.16.60.254 eth1: 172.16.61.253
+* tux2 eth0: 172.16.61.1
 
 portas no switch:
-	tux2 eth0 		- porta 2
-	tux3 eth0 		- porta 1
-	tux4 eth0 		- porta 13
-	tux4 eth1 		- porta 5
-	router feo/0 	- porta 9
+* tux2 eth0 		- porta 2
+* tux3 eth0 		- porta 1
+* tux4 eth0 		- porta 13
+* tux4 eth1 		- porta 5
+* router feo/0 	- porta 9
 
 tux3:
 	updateimage
